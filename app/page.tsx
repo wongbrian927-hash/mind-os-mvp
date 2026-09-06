@@ -26,8 +26,8 @@ const REACTION_TRIALS = 3;
 const STROOP_COUNT = 4;
 const BUFFER_SECONDS = 2;
 const STROOP_BUFFER_SECONDS = 3;
-const MIN_SCALE = 0.42;
-const MAX_SCALE = 1;
+const MIN_SCALE = 0.85;
+const MAX_SCALE = 1.2;
 const TALLY_FORM_URL = "https://tally.so/r/0QWeRA";
 
 const PHASE_MS: Record<BreathPhase, number> = {
@@ -604,28 +604,32 @@ export default function Home() {
         >
           <p className="text-[11px] tracking-[0.35em] text-slate-400">{t.breathTitle}</p>
 
-          <div className="relative mx-auto mt-6 flex h-52 w-52 flex-col items-center justify-center sm:mt-10 sm:h-64 sm:w-64">
+          <div className="relative mx-auto mt-6 flex h-64 w-64 flex-col items-center justify-center overflow-visible sm:mt-10 sm:h-72 sm:w-72">
             <div
               ref={orbRef}
-              className="absolute inset-0 m-auto rounded-full transition-transform duration-300"
+              className={`absolute inset-0 m-auto h-48 w-48 rounded-full transition-transform duration-300 ${
+                phase === "hold" && isRunning ? "animate-pulse" : ""
+              }`}
               style={{
-                width: "70%",
-                height: "70%",
                 transform: `scale(${scale})`,
+                transformOrigin: "center center",
                 transitionDuration: `${transitionMs}ms`,
                 transitionTimingFunction: "ease-in-out",
                 background:
                   "radial-gradient(circle at 30% 30%, rgba(125,211,252,0.95), rgba(14,165,233,0.35) 58%, rgba(99,102,241,0.2) 100%)",
-                boxShadow: "0 0 80px rgba(56,189,248,0.28)",
+                boxShadow:
+                  phase === "hold" && isRunning
+                    ? "0 0 96px rgba(56,189,248,0.55)"
+                    : "0 0 80px rgba(56,189,248,0.28)",
               }}
             />
-            <div className="relative z-10 flex flex-col items-center justify-center">
+            <div className="pointer-events-none relative z-10 flex flex-col items-center justify-center">
               {breathStarted ? (
                 <>
-                  <span className="text-5xl font-light tabular-nums tracking-tight text-[#f8fafc]">
+                  <span className="text-3xl font-bold tabular-nums tracking-tight text-[#f8fafc]">
                     {secondsLeft}
                   </span>
-                  <span className="mt-2 text-xs tracking-[0.38em] text-sky-200/80">
+                  <span className="mt-2 text-sm tracking-[0.28em] text-sky-200/80 opacity-80">
                     {t.phase[phase]}
                   </span>
                 </>
