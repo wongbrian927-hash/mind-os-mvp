@@ -52,18 +52,20 @@ const COPY = {
     lockedTitle: "認知測試 · 已鎖定",
     lockedBody: "完成 3 次完整 4-7-8 呼吸循環後，將自動解鎖。",
     srtTitle: "第一階段 · 純反應測試",
-    srtHint: "手指放喺空白鍵 (Space) 準備",
+    srtHint: "請在畫面變綠時立即按空白鍵 或 點擊此處 / Tap screen",
     startTest: "開始認知測試",
     startTestEn: "Start Cognitive Test",
-    tooSoon: "太早喇，等變綠再撳空白鍵",
-    pressNow: "而家撳空白鍵",
-    waitGreen: "等圓形變綠色再即刻撳空白鍵",
+    tooSoon: "太早喇，等變綠再撳或點擊",
+    pressNow: "而家撳空白鍵或點擊此處",
+    waitGreen: "等變綠，即刻撳空白鍵或點擊此處",
     retry: "重試",
     stroopTitle: "色彩專注測試",
     stroopRule: "只睇字體顏色，唔好睇字面意思",
     keyGuide: "R = 紅色 ｜ B = 藍色",
     keyHint: "建議：左手食指 R，右手食指 B",
     stroopCountdown: (n: number) => `測試將於 ${n} 秒後開始...`,
+    btnRed: "🔴 紅色 (Red)",
+    btnBlue: "🔵 藍色 (Blue)",
     word: { red: "紅", blue: "藍" } as Record<InkColor, string>,
     summary: "數據摘要",
     submit: "提交數據至 Mind OS 問卷",
@@ -79,18 +81,20 @@ const COPY = {
     lockedTitle: "Test · Locked",
     lockedBody: "Finish 3 full 4-7-8 rounds to unlock.",
     srtTitle: "Stage 1 · Simple Reaction",
-    srtHint: "Rest finger on Spacebar",
+    srtHint: "When green, press Space or tap here / Tap screen",
     startTest: "Start Cognitive Test",
     startTestEn: "Start Cognitive Test",
     tooSoon: "Too soon. Wait for green.",
-    pressNow: "Press Space now",
-    waitGreen: "Wait for green, then press Space",
+    pressNow: "Press Space or tap now",
+    waitGreen: "Wait for green, then press Space or tap",
     retry: "Retry",
     stroopTitle: "Color Focus Test",
     stroopRule: "Pick font COLOR, not the word",
     keyGuide: "R = Red ｜ B = Blue",
     keyHint: "Left hand R, Right hand B",
     stroopCountdown: (n: number) => `Starts in ${n}s...`,
+    btnRed: "🔴 Red",
+    btnBlue: "🔵 Blue",
     word: { red: "RED", blue: "BLUE" } as Record<InkColor, string>,
     summary: "Summary",
     submit: "Submit to Mind OS",
@@ -564,36 +568,43 @@ export default function Home() {
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(56,189,248,0.1),_transparent_55%)]"
       />
 
-      <div className="pointer-events-none fixed top-8 left-8 z-20 text-left">
-        <p className="text-[11px] font-medium tracking-[0.42em] text-slate-400/80">
-          MIND OS
-        </p>
-        <p className="mt-1 text-xs tracking-widest text-slate-500">{t.subtitle}</p>
-      </div>
+      <header className="fixed inset-x-0 top-0 z-20 flex items-start justify-between gap-4 px-4 pt-4 sm:px-8 sm:pt-8">
+        <div className="min-w-0 text-left">
+          <p className="text-[11px] font-medium tracking-[0.36em] text-slate-400/80 sm:tracking-[0.42em]">
+            MIND OS
+          </p>
+          <p className="mt-1 truncate text-[10px] tracking-widest text-slate-500 sm:text-xs">
+            {t.subtitle}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2 pt-0.5 text-[11px] tracking-[0.2em] text-slate-500">
+          <button
+            type="button"
+            onClick={() => setLang("en")}
+            className={lang === "en" ? "text-slate-200" : "hover:text-slate-300"}
+          >
+            EN
+          </button>
+          <span className="text-slate-600">|</span>
+          <button
+            type="button"
+            onClick={() => setLang("zh")}
+            className={lang === "zh" ? "text-slate-200" : "hover:text-slate-300"}
+          >
+            繁中
+          </button>
+        </div>
+      </header>
 
-      <div className="fixed top-8 right-8 z-20 flex items-center gap-2 text-[11px] tracking-[0.24em] text-slate-500">
-        <button
-          type="button"
-          onClick={() => setLang("en")}
-          className={lang === "en" ? "text-slate-200" : "hover:text-slate-300"}
+      <main className="relative z-10 mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-4 overflow-hidden px-4 pb-6 pt-16 sm:gap-8 sm:px-10 sm:py-10">
+        <section
+          className={`flex-col items-center justify-center rounded-3xl border border-white/5 bg-white/[0.03] px-4 py-5 text-center sm:px-6 sm:py-10 ${
+            unlocked ? "hidden sm:flex" : "flex"
+          }`}
         >
-          EN
-        </button>
-        <span className="text-slate-600">|</span>
-        <button
-          type="button"
-          onClick={() => setLang("zh")}
-          className={lang === "zh" ? "text-slate-200" : "hover:text-slate-300"}
-        >
-          繁中
-        </button>
-      </div>
-
-      <main className="relative z-10 mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-8 px-6 py-10 sm:px-10">
-        <section className="flex flex-col items-center justify-center rounded-3xl border border-white/5 bg-white/[0.03] px-6 py-10 text-center">
           <p className="text-[11px] tracking-[0.35em] text-slate-400">{t.breathTitle}</p>
 
-          <div className="relative mx-auto mt-10 flex h-64 w-64 flex-col items-center justify-center">
+          <div className="relative mx-auto mt-6 flex h-52 w-52 flex-col items-center justify-center sm:mt-10 sm:h-64 sm:w-64">
             <div
               ref={orbRef}
               className="absolute inset-0 m-auto rounded-full transition-transform duration-300"
@@ -622,7 +633,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="mt-8 flex items-center justify-center gap-8 text-[11px] tracking-[0.28em] text-slate-500">
+          <div className="mt-5 flex items-center justify-center gap-4 text-[11px] tracking-[0.2em] text-slate-500 sm:mt-8 sm:gap-8 sm:tracking-[0.28em]">
             {(["inhale", "hold", "exhale"] as BreathPhase[]).map((item) => (
               <span
                 key={item}
@@ -633,12 +644,12 @@ export default function Home() {
             ))}
           </div>
 
-          <div className="mt-8 flex items-center justify-center gap-3">
+          <div className="mt-5 flex items-center justify-center gap-3 sm:mt-8">
             <button
               type="button"
               onClick={startBreathing}
               disabled={isRunning}
-              className="h-11 min-w-[120px] rounded-full bg-sky-300 px-6 text-xs tracking-[0.28em] text-slate-900 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-40"
+              className="h-11 min-w-[96px] rounded-full bg-sky-300 px-5 text-xs tracking-[0.28em] text-slate-900 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-40 sm:min-w-[120px] sm:px-6"
             >
               {lang === "en" ? "Start" : t.start}
             </button>
@@ -646,13 +657,13 @@ export default function Home() {
               type="button"
               onClick={pauseBreathing}
               disabled={!isRunning}
-              className="h-11 min-w-[120px] rounded-full border border-white/15 bg-white/5 px-6 text-xs tracking-[0.28em] text-[#f8fafc] transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+              className="h-11 min-w-[96px] rounded-full border border-white/15 bg-white/5 px-5 text-xs tracking-[0.28em] text-[#f8fafc] transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 sm:min-w-[120px] sm:px-6"
             >
               {lang === "en" ? "Pause" : t.pause}
             </button>
           </div>
 
-          <div className="mt-8 flex items-center justify-center gap-3">
+          <div className="mt-5 flex items-center justify-center gap-3 sm:mt-8">
             {Array.from({ length: TARGET_CYCLES }).map((_, index) => (
               <span
                 key={index}
@@ -667,7 +678,7 @@ export default function Home() {
           </p>
         </section>
 
-        <section className="flex min-h-[28rem] flex-col items-center justify-center rounded-3xl border border-white/5 bg-white/[0.03] px-6 py-10 text-center">
+        <section className="flex min-h-0 flex-1 flex-col items-center justify-center rounded-3xl border border-white/5 bg-white/[0.03] px-4 py-5 text-center sm:min-h-[28rem] sm:flex-none sm:px-6 sm:py-10">
           {!unlocked ? (
             <div className="flex flex-col items-center justify-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 text-slate-500">
@@ -721,7 +732,15 @@ export default function Home() {
               </p>
             </div>
           ) : sessionStage === "srt" ? (
-            <div className="flex flex-col items-center justify-center">
+            <button
+              type="button"
+              onClick={handleReaction}
+              onTouchStart={(event) => {
+                event.preventDefault();
+                handleReaction();
+              }}
+              className="flex w-full max-w-md cursor-pointer select-none flex-col items-center justify-center rounded-2xl px-2 py-4"
+            >
               <p className="text-[11px] tracking-[0.35em] text-slate-400">{t.srtTitle}</p>
               <p className="mt-3 text-sm text-slate-400">
                 {reactionPhase === "too_soon"
@@ -730,11 +749,11 @@ export default function Home() {
                     ? t.pressNow
                     : t.waitGreen}
               </p>
-              <p className="mt-5 max-w-md text-base font-medium leading-7 tracking-wide text-sky-200">
+              <p className="mt-4 max-w-md text-sm font-medium leading-7 tracking-wide text-sky-200 sm:text-base">
                 {t.srtHint}
               </p>
               <div
-                className="mt-10 flex h-44 w-44 items-center justify-center rounded-full transition-colors duration-200"
+                className="mt-8 flex h-36 w-36 items-center justify-center rounded-full transition-colors duration-200 sm:mt-10 sm:h-44 sm:w-44"
                 style={{
                   background:
                     reactionPhase === "go"
@@ -756,8 +775,10 @@ export default function Home() {
                       : `${latencies.length + 1} / ${REACTION_TRIALS}`}
                 </span>
               </div>
-              <p className="mt-6 text-xs tracking-[0.32em] text-slate-500">Space</p>
-            </div>
+              <p className="mt-5 text-xs tracking-[0.18em] text-slate-500">
+                Space / Tap screen
+              </p>
+            </button>
           ) : sessionStage === "stroop" ? (
             <div className="flex flex-col items-center justify-center">
               <p className="text-[11px] tracking-[0.35em] text-slate-400">{t.stroopTitle}</p>
@@ -766,9 +787,9 @@ export default function Home() {
                 <p className="tracking-wide text-slate-300">{t.keyGuide}</p>
                 <p className="text-xs tracking-wide text-slate-500">{t.keyHint}</p>
               </div>
-              <div className="mt-12 flex min-h-28 items-center justify-center">
+              <div className="mt-8 flex min-h-24 items-center justify-center sm:mt-12 sm:min-h-28">
                 {stroopPhase === "intro" ? (
-                  <p className="max-w-sm text-lg font-medium leading-8 tracking-wide text-sky-200">
+                  <p className="max-w-xs px-2 text-sm font-medium leading-7 tracking-wide text-sky-200 sm:max-w-sm sm:text-lg sm:leading-8">
                     {t.stroopCountdown(bufferCount)}
                   </p>
                 ) : stroopPhase === "stimulus" && currentStroop ? (
@@ -782,10 +803,36 @@ export default function Home() {
                   <p className="text-sm tracking-widest text-slate-600">·</p>
                 )}
               </div>
-              <p className="mt-8 text-xs tracking-[0.28em] text-slate-500">
+              <p className="mt-6 text-xs tracking-[0.28em] text-slate-500 sm:mt-8">
                 {stroopPhase === "intro" ? 0 : Math.min(stroopIndex + 1, STROOP_COUNT)} /{" "}
                 {STROOP_COUNT}
               </p>
+              {stroopPhase === "stimulus" ? (
+                <div className="mt-5 grid w-full max-w-md grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleStroopKey("red")}
+                    onTouchStart={(event) => {
+                      event.preventDefault();
+                      handleStroopKey("red");
+                    }}
+                    className="rounded-xl bg-rose-500 py-4 text-lg font-bold text-white shadow-[0_0_24px_rgba(244,63,94,0.35)] transition active:scale-95"
+                  >
+                    {t.btnRed}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleStroopKey("blue")}
+                    onTouchStart={(event) => {
+                      event.preventDefault();
+                      handleStroopKey("blue");
+                    }}
+                    className="rounded-xl bg-blue-500 py-4 text-lg font-bold text-white shadow-[0_0_24px_rgba(59,130,246,0.35)] transition active:scale-95"
+                  >
+                    {t.btnBlue}
+                  </button>
+                </div>
+              ) : null}
             </div>
           ) : (
             <div className="flex w-full flex-col items-center justify-center">
