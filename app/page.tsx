@@ -67,8 +67,14 @@ const COPY = {
     btnRed: "🔴 紅色 (Red)",
     btnBlue: "🔵 藍色 (Blue)",
     word: { red: "紅", blue: "藍" } as Record<InkColor, string>,
-    summary: "數據摘要",
-    submit: "提交數據至 Mind OS 問卷",
+    summary: "Neural Benchmark",
+    srtLabel: "反應時間",
+    interferenceLabel: "抗干擾損耗",
+    accLabel: "專注準確度",
+    statusLine: "狀態：深層校準完成 (Post-Breathing Calibration)",
+    submit: "📋 填寫 30 秒體驗感受（跳轉問卷）",
+    share: "📸 截圖保存報告",
+    shareHint: "請直接截圖此卡片以保存報告",
     again: "再測一次",
   },
   en: {
@@ -96,8 +102,14 @@ const COPY = {
     btnRed: "🔴 Red",
     btnBlue: "🔵 Blue",
     word: { red: "RED", blue: "BLUE" } as Record<InkColor, string>,
-    summary: "Summary",
-    submit: "Submit to Mind OS",
+    summary: "Neural Benchmark",
+    srtLabel: "Reaction Time",
+    interferenceLabel: "Interference Loss",
+    accLabel: "Focus Accuracy",
+    statusLine: "Status: Post-Breathing Calibration",
+    submit: "📋 30-sec reflection (opens survey)",
+    share: "📸 Save report (screenshot)",
+    shareHint: "Screenshot this card to save the report",
     again: "Retry",
   },
 } as const;
@@ -133,6 +145,164 @@ function mean(values: number[]) {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
+type RankCard = {
+  title: string;
+  topTag: string | null;
+  dot: string;
+  desc: string;
+  display: string;
+};
+
+function GlowDot({ className }: { className: string }) {
+  return (
+    <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${className}`} />
+  );
+}
+
+function getSrtRank(ms: number, lang: Lang): RankCard {
+  const isZh = lang === "zh";
+  if (ms < 200) {
+    return {
+      title: isZh ? "超神經反射" : "Hyper-Reflex",
+      topTag: "TOP 1%",
+      dot: "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]",
+      desc: isZh
+        ? "視覺神經衝動傳導迅速，反應閾值處於職業選手級區間。"
+        : "Visual impulse transmission is rapid. Reflex sits in the elite band.",
+      display: String(ms),
+    };
+  }
+  if (ms < 240) {
+    return {
+      title: isZh ? "專注大師" : "Master Focus",
+      topTag: "TOP 10%",
+      dot: "bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.8)]",
+      desc: isZh
+        ? "身心高度清醒，副交感與專注維持穩定平衡。"
+        : "Highly awake. Calm and focus remain in stable balance.",
+      display: String(ms),
+    };
+  }
+  if (ms < 290) {
+    return {
+      title: isZh ? "敏銳清晰" : "Sharp Mind",
+      topTag: "TOP 30%",
+      dot: "bg-cyan-300 shadow-[0_0_8px_rgba(103,232,249,0.7)]",
+      desc: isZh
+        ? "狀態良好，思維清晰，反應維持敏捷。"
+        : "Clear mind. Response speed remains sharp.",
+      display: String(ms),
+    };
+  }
+  if (ms < 360) {
+    return {
+      title: isZh ? "平穩常態" : "Baseline",
+      topTag: "TOP 60%",
+      dot: "bg-slate-300 shadow-[0_0_8px_rgba(203,213,225,0.5)]",
+      desc: isZh
+        ? "處於日常放鬆區間，認知功能運作正常。"
+        : "Everyday baseline. Cognition is operating as usual.",
+      display: String(ms),
+    };
+  }
+  return {
+    title: isZh ? "低電量警示" : "Brain Fog",
+    topTag: null,
+    dot: "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.7)]",
+    desc: isZh
+      ? "大腦處於疲勞狀態，建議再做一次 4-7-8 呼吸深層重置。"
+      : "Fatigue state. Run another 4-7-8 round to reset.",
+    display: String(ms),
+  };
+}
+
+function getInterferenceRank(ms: number, lang: Lang): RankCard {
+  const isZh = lang === "zh";
+  if (ms <= 0) {
+    return {
+      title: isZh ? "直覺屏障" : "Zero Interference",
+      topTag: null,
+      dot: "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]",
+      desc: isZh
+        ? "文字衝突抑制達到零損耗閾值。"
+        : "Conflict suppression is at the zero-loss threshold.",
+      display: "0",
+    };
+  }
+  if (ms <= 40) {
+    return {
+      title: isZh ? "極低干擾" : "High Resilience",
+      topTag: null,
+      dot: "bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.8)]",
+      desc: isZh
+        ? "抗干擾濾波迅速，大腦過濾機制運作穩定。"
+        : "Filter speed is high. Noise drops quickly.",
+      display: `+${ms}`,
+    };
+  }
+  if (ms <= 80) {
+    return {
+      title: isZh ? "平衡抑制" : "Balanced Control",
+      topTag: null,
+      dot: "bg-slate-300 shadow-[0_0_8px_rgba(203,213,225,0.5)]",
+      desc: isZh
+        ? "抗干擾處於常態雙重處理節奏。"
+        : "Dual-process pace sits in the typical band.",
+      display: `+${ms}`,
+    };
+  }
+  return {
+    title: isZh ? "顯著干擾" : "High Cognitive Load",
+    topTag: null,
+    dot: "bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.7)]",
+    desc: isZh
+      ? "文字意義干擾明顯，抑制控制負載偏高。"
+      : "Word meaning pulls attention. Inhibitory load is elevated.",
+    display: `+${ms}`,
+  };
+}
+
+function getDiagnosis(avgSrt: number, interference: number, lang: Lang) {
+  const isZh = lang === "zh";
+  if (avgSrt >= 360) {
+    return isZh
+      ? "大腦處於疲勞狀態，建議再做一次 4-7-8 呼吸深層重置。"
+      : "The system is fatigued. Another 4-7-8 round is indicated.";
+  }
+  if (avgSrt < 240 && interference <= 0) {
+    return isZh
+      ? "視覺神經衝動傳導迅速，文字衝突抑制達到零損耗閾值。"
+      : "Visual impulse transmission is rapid. Conflict suppression is at the zero-loss threshold.";
+  }
+  if (interference <= 0) {
+    return isZh
+      ? "色彩辨識直達反射通路，文字衝突抑制處於零損耗閾值。"
+      : "Color identification reaches reflex pathways. Conflict loss is at zero.";
+  }
+  if (interference > 80) {
+    return isZh
+      ? "反應通道尚可，但文字意義干擾顯著，抑制控制負載偏高。"
+      : "Response channels are intact, but semantic interference is significant.";
+  }
+  if (avgSrt < 290) {
+    return isZh
+      ? "視覺傳導維持敏捷，抗干擾濾波在可接受區間內穩定運作。"
+      : "Visual conduction remains sharp. Interference filtering is stable.";
+  }
+  return isZh
+    ? "認知節奏處於常態區間，抑制與反應協調運作。"
+    : "Cognition sits in the baseline band. Inhibition and reaction remain coordinated.";
+}
+
+function formatStamp(date: Date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mm = String(date.getMinutes()).padStart(2, "0");
+  return `${y}.${m}.${d}  ${hh}:${mm}`;
+}
+
 function readScale(element: HTMLElement | null) {
   if (!element) return MIN_SCALE;
   const value = window.getComputedStyle(element).transform;
@@ -166,6 +336,8 @@ export default function Home() {
   const [stroopTrials, setStroopTrials] = useState<StroopTrial[]>([]);
   const [stroopIndex, setStroopIndex] = useState(0);
   const [stroopResults, setStroopResults] = useState<StroopResult[]>([]);
+  const [reportAt, setReportAt] = useState<Date | null>(null);
+  const [shareHint, setShareHint] = useState(false);
 
   const orbRef = useRef<HTMLDivElement>(null);
   const phaseRef = useRef<BreathPhase>("inhale");
@@ -419,6 +591,7 @@ export default function Home() {
       const nextIndex = stroopIndexRef.current + 1;
       if (nextIndex >= STROOP_COUNT) {
         sessionStageRef.current = "summary";
+        setReportAt(new Date());
         setSessionStage("summary");
         return;
       }
@@ -536,18 +709,46 @@ export default function Home() {
     setReactionPhase("ready");
     setStroopPhase("intro");
     setBufferCount(BUFFER_SECONDS);
+    setReportAt(null);
+    setShareHint(false);
+  };
+
+  const shareReport = async () => {
+    const stamp = reportAt ? formatStamp(reportAt) : "";
+    const text = [
+      "MIND OS // NEURAL BENCHMARK",
+      stamp,
+      avgSrt !== null && srtRank ? `${avgSrt} ms · ${srtRank.title}` : "",
+      interferenceRank ? `${t.interferenceLabel}: ${interferenceRank.display} ms` : "",
+      acc !== null ? `ACC ${acc}%` : "",
+      avgSrt !== null && rawInterference !== null
+        ? getDiagnosis(avgSrt, rawInterference, lang)
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    try {
+      if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+        await navigator.share({ title: "MIND OS Neural Benchmark", text });
+        return;
+      }
+    } catch {
+      // user cancelled share
+    }
+    setShareHint(true);
+    window.setTimeout(() => setShareHint(false), 2600);
   };
 
   const avgSrt =
     latencies.length === REACTION_TRIALS ? Math.round(mean(latencies)) : null;
-  const allStroopCorrect =
-    stroopResults.length === STROOP_COUNT && stroopResults.every((item) => item.correct);
-  const interference = allStroopCorrect
-    ? Math.round(
-        mean(stroopResults.filter((item) => !item.congruent).map((item) => item.latencyMs)) -
-          mean(stroopResults.filter((item) => item.congruent).map((item) => item.latencyMs)),
-      )
-    : null;
+  const rawInterference =
+    stroopResults.length === STROOP_COUNT
+      ? Math.round(
+          mean(stroopResults.filter((item) => !item.congruent).map((item) => item.latencyMs)) -
+            mean(stroopResults.filter((item) => item.congruent).map((item) => item.latencyMs)),
+        )
+      : null;
   const acc =
     stroopResults.length === STROOP_COUNT
       ? Math.round(
@@ -555,9 +756,12 @@ export default function Home() {
         )
       : null;
   const tallyHref =
-    avgSrt !== null && acc !== null
-      ? `${TALLY_FORM_URL}?avg_srt=${avgSrt}&interference=${interference ?? ""}&acc=${acc}&lang=${lang}`
+    avgSrt !== null && rawInterference !== null && acc !== null
+      ? `${TALLY_FORM_URL}?avg_srt=${avgSrt}&interference=${rawInterference}&acc=${acc}&lang=${lang}`
       : TALLY_FORM_URL;
+  const srtRank = avgSrt !== null ? getSrtRank(avgSrt, lang) : null;
+  const interferenceRank =
+    rawInterference !== null ? getInterferenceRank(rawInterference, lang) : null;
 
   const currentStroop = stroopTrials[stroopIndex];
 
@@ -596,7 +800,11 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-4 overflow-hidden px-4 pb-6 pt-16 sm:gap-8 sm:px-10 sm:py-10">
+      <main
+        className={`relative z-10 mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-4 px-4 pb-6 pt-16 sm:gap-8 sm:px-10 sm:py-10 ${
+          sessionStage === "summary" ? "overflow-y-auto" : "overflow-hidden"
+        }`}
+      >
         <section
           className={`flex-col items-center justify-center rounded-3xl border border-white/5 bg-white/[0.03] px-4 py-5 text-center sm:px-6 sm:py-10 ${
             unlocked ? "hidden sm:flex" : "flex"
@@ -682,7 +890,13 @@ export default function Home() {
           </p>
         </section>
 
-        <section className="flex min-h-0 flex-1 flex-col items-center justify-center rounded-3xl border border-white/5 bg-white/[0.03] px-4 py-5 text-center sm:min-h-[28rem] sm:flex-none sm:px-6 sm:py-10">
+        <section
+          className={`flex min-h-0 flex-1 flex-col items-center justify-center text-center ${
+            sessionStage === "summary"
+              ? "rounded-none border-0 bg-transparent px-0 py-0"
+              : "rounded-3xl border border-white/5 bg-white/[0.03] px-4 py-5 sm:min-h-[28rem] sm:flex-none sm:px-6 sm:py-10"
+          }`}
+        >
           {!unlocked ? (
             <div className="flex flex-col items-center justify-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 text-slate-500">
@@ -839,49 +1053,108 @@ export default function Home() {
               ) : null}
             </div>
           ) : (
-            <div className="flex w-full flex-col items-center justify-center">
-              <p className="text-[11px] tracking-[0.35em] text-slate-400">{t.summary}</p>
-              <div className="mt-10 grid w-full max-w-md gap-6">
-                <div className="rounded-2xl border border-white/5 bg-white/[0.03] px-6 py-6">
-                  <p className="text-[11px] tracking-[0.28em] text-slate-500">avg_srt</p>
-                  <p className="mt-2 text-4xl font-light tabular-nums text-[#f8fafc]">
-                    {avgSrt}
-                    <span className="ml-2 text-sm tracking-widest text-slate-400">ms</span>
+            <div className="flex w-full justify-center">
+              <article className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-950/80 px-5 py-6 text-left backdrop-blur-xl sm:px-6 sm:py-8">
+                <header className="border-b border-white/10 pb-4">
+                  <p className="font-mono text-[10px] tracking-[0.28em] text-slate-500">
+                    MIND OS // NEURAL BENCHMARK
                   </p>
-                </div>
-                <div className="rounded-2xl border border-white/5 bg-white/[0.03] px-6 py-6">
-                  <p className="text-[11px] tracking-[0.28em] text-slate-500">interference</p>
-                  <p className="mt-2 text-4xl font-light tabular-nums text-[#f8fafc]">
-                    {interference === null ? "—" : interference}
-                    <span className="ml-2 text-sm tracking-widest text-slate-400">ms</span>
+                  <p className="mt-2 font-mono text-[10px] tracking-widest text-slate-600">
+                    {reportAt ? formatStamp(reportAt) : "—"}
                   </p>
-                </div>
-                <div className="rounded-2xl border border-white/5 bg-white/[0.03] px-6 py-6">
-                  <p className="text-[11px] tracking-[0.28em] text-slate-500">acc</p>
-                  <p className="mt-2 text-4xl font-light tabular-nums text-[#f8fafc]">
-                    {acc}
-                    <span className="ml-2 text-sm tracking-widest text-slate-400">%</span>
+                  <p className="mt-3 text-xs leading-5 text-slate-400">{t.statusLine}</p>
+                </header>
+
+                {srtRank && avgSrt !== null ? (
+                  <section className="pt-6">
+                    <p className="text-[10px] tracking-[0.28em] text-slate-500">
+                      {t.srtLabel}
+                    </p>
+                    <p className="mt-2 font-mono text-4xl tracking-tight text-[#f8fafc]">
+                      {avgSrt}
+                      <span className="ml-2 font-sans text-sm font-normal tracking-wide text-slate-500">
+                        ms
+                      </span>
+                    </p>
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <p className="flex min-w-0 items-center text-sm tracking-wide text-slate-200">
+                        <GlowDot className={`mr-2 ${srtRank.dot}`} />
+                        {srtRank.title}
+                      </p>
+                      {srtRank.topTag ? (
+                        <span className="shrink-0 rounded-full border border-white/15 px-2.5 py-0.5 font-mono text-[10px] tracking-widest text-slate-300">
+                          {srtRank.topTag}
+                        </span>
+                      ) : null}
+                    </div>
+                  </section>
+                ) : null}
+
+                {interferenceRank && acc !== null ? (
+                  <section className="mt-6 grid grid-cols-2 gap-4 border-y border-white/10 py-5">
+                    <div>
+                      <p className="text-[10px] tracking-[0.18em] text-slate-500">
+                        {t.interferenceLabel}
+                      </p>
+                      <p className="mt-2 font-mono text-2xl tracking-tight text-[#f8fafc] sm:text-4xl">
+                        {interferenceRank.display}
+                        <span className="ml-1 font-sans text-xs tracking-wide text-slate-500">
+                          ms
+                        </span>
+                      </p>
+                      <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                        {rawInterference !== null && rawInterference <= 0
+                          ? "Zero Interference"
+                          : interferenceRank.title}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] tracking-[0.18em] text-slate-500">
+                        {t.accLabel}
+                      </p>
+                      <p className="mt-2 font-mono text-2xl tracking-tight text-[#f8fafc] sm:text-4xl">
+                        {acc}
+                        <span className="ml-1 font-sans text-xs tracking-wide text-slate-500">
+                          % ACC
+                        </span>
+                      </p>
+                    </div>
+                  </section>
+                ) : null}
+
+                {avgSrt !== null && rawInterference !== null ? (
+                  <p className="pt-5 text-sm leading-6 text-slate-400">
+                    {getDiagnosis(avgSrt, rawInterference, lang)}
                   </p>
-                </div>
-              </div>
-              <a
-                href={tallyHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-10 inline-flex min-h-14 items-center justify-center rounded-full bg-sky-300 px-8 py-4 text-sm font-semibold tracking-[0.14em] text-slate-900 shadow-[0_0_48px_rgba(125,211,252,0.35)] transition hover:bg-sky-200"
-              >
-                {t.submit}
-              </a>
-              <button
-                type="button"
-                onClick={retrySession}
-                className="mt-4 h-11 min-w-[148px] rounded-full border border-white/15 bg-white/5 px-8 text-xs tracking-[0.32em] text-[#f8fafc] transition hover:bg-white/10"
-              >
-                {t.again}
-              </button>
+                ) : null}
+              </article>
             </div>
           )}
         </section>
+        {sessionStage === "summary" ? (
+          <div className="mx-auto flex w-full max-w-md flex-col gap-2">
+            <a
+              href={tallyHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-12 items-center justify-center rounded-full bg-[#f8fafc] px-5 text-sm font-medium tracking-wide text-slate-900 transition hover:bg-white"
+            >
+              {t.submit}
+            </a>
+            <button
+              type="button"
+              onClick={() => {
+                void shareReport();
+              }}
+              className="inline-flex min-h-12 items-center justify-center rounded-full border border-white/15 bg-transparent px-5 text-sm tracking-wide text-slate-300 transition hover:bg-white/5"
+            >
+              {t.share}
+            </button>
+            {shareHint ? (
+              <p className="text-center text-xs tracking-wide text-slate-500">{t.shareHint}</p>
+            ) : null}
+          </div>
+        ) : null}
       </main>
     </div>
   );
