@@ -283,21 +283,7 @@ function isIos() {
   );
 }
 
-const EXPORT_WIDTH = 1080;
-const EXPORT_STORY_HEIGHT = 1920;
-const EXPORT_SQUARE_HEIGHT = 1080;
-
-function getExportPixelRatio(layoutWidth: number, layoutHeight: number) {
-  const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
-  let pixelRatio = Math.min(3, Math.max(2, dpr) * 1.5);
-  const longEdge = Math.max(layoutWidth, layoutHeight) * pixelRatio;
-  if (longEdge > 4096) {
-    pixelRatio = 4096 / Math.max(layoutWidth, layoutHeight);
-  }
-  return pixelRatio;
-}
-
-async function waitForFontsAndPaint() {
+async function waitForFontsReady() {
   try {
     if (typeof document !== "undefined" && "fonts" in document) {
       await document.fonts.ready;
@@ -305,184 +291,25 @@ async function waitForFontsAndPaint() {
   } catch {
     // best-effort
   }
-  await new Promise<void>((resolve) => {
-    window.setTimeout(resolve, 50);
-  });
 }
 
-function applyExportLayout(clone: HTMLElement, aspect: CardAspect) {
-  const height = aspect === "story" ? EXPORT_STORY_HEIGHT : EXPORT_SQUARE_HEIGHT;
-  const padY = aspect === "story" ? 96 : 72;
-  const padX = 80;
+/** Capture the on-screen card node as-is (WYSIWYG). */
+async function renderCardBlob(source: HTMLElement): Promise<Blob> {
+  await waitForFontsReady();
 
-  clone.setAttribute("data-export-root", "true");
-  clone.className = clone.className
-    .replace(/aspect-\[9\/16\]/g, "")
-    .replace(/aspect-square/g, "");
+  const options = {
+    pixelRatio: 3,
+    cacheBust: true,
+    backgroundColor: "#F8F9FA",
+  };
 
-  Object.assign(clone.style, {
-    width: `${EXPORT_WIDTH}px`,
-    height: `${height}px`,
-    maxWidth: `${EXPORT_WIDTH}px`,
-    minHeight: "0",
-    aspectRatio: "auto",
-    position: "relative",
-    display: "block",
-    overflow: "hidden",
-    transform: "none",
-    margin: "0",
-    boxSizing: "border-box",
-  });
+  // Warm Safari / html-to-image font cache without mutating layout.
+  await toPng(source, options);
+  await new Promise<void>((resolve) => window.setTimeout(resolve, 30));
 
-  const shell = clone.querySelector("[data-card-shell]") as HTMLElement | null;
-  if (shell) {
-    shell.classList.remove("absolute", "inset-0");
-    Object.assign(shell.style, {
-      position: "relative",
-      inset: "auto",
-      top: "0",
-      right: "0",
-      bottom: "0",
-      left: "0",
-      display: "flex",
-      flexDirection: "column",
-      justifyContent: "space-between",
-      width: "100%",
-      height: "100%",
-      minHeight: "0",
-      maxHeight: "100%",
-      padding: `${padY}px ${padX}px`,
-      boxSizing: "border-box",
-      margin: "0",
-    });
-  }
-
-  // Drop preview-only vertical margins; spacing comes from justify-between.
-  clone.querySelectorAll("[data-card-block]").forEach((node) => {
-    const el = node as HTMLElement;
-    el.style.marginTop = "0";
-    el.style.marginBottom = "0";
-    el.style.flexShrink = "0";
-  });
-
-  const latency = clone.querySelector("[data-export-latency]") as HTMLElement | null;
-  if (latency) {
-    latency.style.fontSize = aspect === "story" ? "118px" : "96px";
-    latency.style.lineHeight = "1";
-    latency.style.letterSpacing = "-0.04em";
-  }
-
-  const latencyUnit = clone.querySelector("[data-export-latency-unit]") as HTMLElement | null;
-  if (latencyUnit) {
-    latencyUnit.style.fontSize = "28px";
-  }
-
-  clone.querySelectorAll("[data-export-label]").forEach((node) => {
-    const el = node as HTMLElement;
-    el.style.fontSize = "18px";
-    el.style.letterSpacing = "0.28em";
-  });
-
-  clone.querySelectorAll("[data-export-metric]").forEach((node) => {
-    const el = node as HTMLElement;
-    el.style.fontSize = aspect === "story" ? "64px" : "52px";
-    el.style.lineHeight = "1.05";
-  });
-
-  clone.querySelectorAll("[data-export-title]").forEach((node) => {
-    const el = node as HTMLElement;
-    el.style.fontSize = "28px";
-  });
-
-  clone.querySelectorAll("[data-export-body]").forEach((node) => {
-    const el = node as HTMLElement;
-    el.style.fontSize = "22px";
-    el.style.lineHeight = "1.55";
-  });
-
-  clone.querySelectorAll("[data-export-mono]").forEach((node) => {
-    const el = node as HTMLElement;
-    el.style.fontSize = "20px";
-  });
-
-  clone.querySelectorAll("[data-export-pill]").forEach((node) => {
-    const el = node as HTMLElement;
-    el.style.fontSize = "16px";
-    el.style.padding = "8px 14px";
-  });
-
-  const bar = clone.querySelector("[data-export-bar]") as HTMLElement | null;
-  if (bar) {
-    bar.style.height = "4px";
-    bar.style.marginTop = "28px";
-    bar.style.marginBottom = "8px";
-  }
-
-  return { width: EXPORT_WIDTH, height };
-}
-
-function createExportMount(source: HTMLElement, aspect: CardAspect) {
-  const mount = document.createElement("div");
-  mount.setAttribute("data-mind-os-export-mount", "true");
-  mount.style.cssText = [
-    "position:fixed",
-    "left:-12000px",
-    "top:0",
-    "width:1080px",
-    "height:auto",
-    "overflow:visible",
-    "pointer-events:none",
-    "opacity:1",
-    "z-index:-1",
-  ].join(";");
-
-  const clone = source.cloneNode(true) as HTMLElement;
-  const size = applyExportLayout(clone, aspect);
-  mount.style.width = `${size.width}px`;
-  mount.style.height = `${size.height}px`;
-  mount.appendChild(clone);
-  document.body.appendChild(mount);
-  return { mount, clone, size };
-}
-
-async function renderExportBlob(
-  source: HTMLElement,
-  aspect: CardAspect,
-): Promise<Blob> {
-  const { mount, clone, size } = createExportMount(source, aspect);
-
-  try {
-    await waitForFontsAndPaint();
-
-    const pixelRatio = getExportPixelRatio(size.width, size.height);
-    const options = {
-      width: size.width,
-      height: size.height,
-      pixelRatio,
-      cacheBust: true,
-      backgroundColor: "#F8F9FA",
-      style: {
-        width: `${size.width}px`,
-        height: `${size.height}px`,
-        maxWidth: `${size.width}px`,
-        minHeight: "0px",
-        aspectRatio: "auto",
-        transform: "none",
-        margin: "0",
-      },
-    };
-
-    // Pass 1: prime Safari / html-to-image font embed cache (discarded).
-    await toPng(clone, options);
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 30));
-
-    // Pass 2: real capture.
-    const blob = await toBlob(clone, options);
-    if (!blob) throw new Error("Failed to render image blob");
-    return blob;
-  } finally {
-    mount.remove();
-  }
+  const blob = await toBlob(source, options);
+  if (!blob) throw new Error("Failed to render image blob");
+  return blob;
 }
 
 async function saveExportBlob(blob: Blob, filename: string) {
@@ -520,12 +347,8 @@ async function saveExportBlob(blob: Blob, filename: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
-async function exportCardImage(
-  source: HTMLElement,
-  filename: string,
-  aspect: CardAspect,
-) {
-  const blob = await renderExportBlob(source, aspect);
+async function exportCardImage(source: HTMLElement, filename: string) {
+  const blob = await renderCardBlob(source);
   await saveExportBlob(blob, filename);
 }
 
@@ -576,7 +399,7 @@ export default function ResultCard({
     setToast(null);
     try {
       const filename = `mind-os-${sessionId.toLowerCase()}.png`;
-      await exportCardImage(cardRef.current, filename, aspect);
+      await exportCardImage(cardRef.current, filename);
       setToast(t.saved);
       onSaved?.();
     } catch {
@@ -585,7 +408,7 @@ export default function ResultCard({
       setBusy(false);
       window.setTimeout(() => setToast(null), 2600);
     }
-  }, [aspect, busy, lang, onSaved, sessionId, t.saved]);
+  }, [busy, lang, onSaved, sessionId, t.saved]);
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col items-center gap-4">
