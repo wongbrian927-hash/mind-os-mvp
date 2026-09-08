@@ -283,38 +283,143 @@ function isIos() {
   );
 }
 
-async function downloadPng(node: HTMLElement, filename: string) {
-  const options = {
-    pixelRatio: 2,
-    cacheBust: true,
-    backgroundColor: "#F8F9FA",
-  };
+const EXPORT_STORY = { width: 1080, height: 1920 } as const;
+const EXPORT_SQUARE = { width: 1080, height: 1080 } as const;
+
+function getExportPixelRatio() {
+  const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+  // Retina floor at 2×, boost ~1.5×, hard-cap 3× to stay under common iOS canvas limits.
+  return Math.min(3, Math.max(2, dpr) * 1.5);
+}
+
+async function waitForFontsAndPaint() {
+  try {
+    if (typeof document !== "undefined" && "fonts" in document) {
+      await document.fonts.ready;
+    }
+  } catch {
+    // best-effort
+  }
+  await new Promise<void>((resolve) => {
+    window.setTimeout(resolve, 50);
+  });
+}
+
+function createExportMount(source: HTMLElement, width: number, height: number) {
+  const mount = document.createElement("div");
+  mount.setAttribute("data-mind-os-export-mount", "true");
+  mount.style.cssText = [
+    "position:fixed",
+    "left:-10000px",
+    "top:0",
+    "width:" + width + "px",
+    "height:" + height + "px",
+    "overflow:hidden",
+    "pointer-events:none",
+    "opacity:1",
+    "z-index:-1",
+  ].join(";");
+
+  const clone = source.cloneNode(true) as HTMLElement;
+  clone.style.width = `${width}px`;
+  clone.style.height = `${height}px`;
+  clone.style.maxWidth = `${width}px`;
+  clone.style.aspectRatio = "auto";
+  clone.style.position = "relative";
+  clone.style.transform = "none";
+  clone.style.margin = "0";
+
+  mount.appendChild(clone);
+  document.body.appendChild(mount);
+  return { mount, clone };
+}
+
+async function renderExportBlob(
+  source: HTMLElement,
+  aspect: CardAspect,
+): Promise<Blob> {
+  const size = aspect === "story" ? EXPORT_STORY : EXPORT_SQUARE;
+  const { mount, clone } = createExportMount(source, size.width, size.height);
+
+  try {
+    await waitForFontsAndPaint();
+
+    let pixelRatio = getExportPixelRatio();
+    // Keep physical canvas under ~4096 on the long edge for older iOS Safari.
+    const longEdge = Math.max(size.width, size.height) * pixelRatio;
+    if (longEdge > 4096) {
+      pixelRatio = 4096 / Math.max(size.width, size.height);
+    }
+
+    const options = {
+      width: size.width,
+      height: size.height,
+      pixelRatio,
+      cacheBust: true,
+      backgroundColor: "#F8F9FA",
+      style: {
+        width: `${size.width}px`,
+        height: `${size.height}px`,
+        transform: "none",
+        margin: "0",
+      },
+    };
+
+    // Pass 1: prime Safari / html-to-image font embed cache (discarded).
+    await toPng(clone, options);
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 30));
+
+    // Pass 2: real capture.
+    const blob = await toBlob(clone, options);
+    if (!blob) throw new Error("Failed to render image blob");
+    return blob;
+  } finally {
+    mount.remove();
+  }
+}
+
+async function saveExportBlob(blob: Blob, filename: string) {
+  const file = new File([blob], filename, { type: "image/png" });
 
   if (isIos()) {
-    const blob = await toBlob(node, options);
-    if (!blob) throw new Error("Failed to render image");
-    const file = new File([blob], filename, { type: "image/png" });
     if (typeof navigator.share === "function" && navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ files: [file], title: "Mind OS Neural Benchmark" });
+      await navigator.share({
+        files: [file],
+        title: "Mind OS Neural Benchmark",
+      });
       return;
     }
     const url = URL.createObjectURL(blob);
+    // iOS Safari often ignores <a download>; open blob so user can long-press save.
     const opened = window.open(url, "_blank");
     if (!opened) {
       const link = document.createElement("a");
       link.href = url;
-      link.download = filename;
+      link.target = "_blank";
+      link.rel = "noopener";
       link.click();
     }
-    window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
     return;
   }
 
-  const dataUrl = await toPng(node, options);
+  const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.download = filename;
-  link.href = dataUrl;
+  link.href = url;
+  document.body.appendChild(link);
   link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+}
+
+async function exportCardImage(
+  source: HTMLElement,
+  filename: string,
+  aspect: CardAspect,
+) {
+  const blob = await renderExportBlob(source, aspect);
+  await saveExportBlob(blob, filename);
 }
 
 export default function ResultCard({
@@ -355,7 +460,7 @@ export default function ResultCard({
     setToast(null);
     try {
       const filename = `mind-os-${sessionId.toLowerCase()}.png`;
-      await downloadPng(cardRef.current, filename);
+      await exportCardImage(cardRef.current, filename, aspect);
       setToast(t.saved);
       onSaved?.();
     } catch {
@@ -364,7 +469,7 @@ export default function ResultCard({
       setBusy(false);
       window.setTimeout(() => setToast(null), 2600);
     }
-  }, [busy, lang, onSaved, sessionId, t.saved]);
+  }, [aspect, busy, lang, onSaved, sessionId, t.saved]);
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col items-center gap-4">
