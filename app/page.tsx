@@ -50,8 +50,7 @@ const COPY = {
     start: "開始",
     pause: "暫停",
     round: (x: number) => `循環 ${x} / 3`,
-    lockedTitle: "認知測試 · 已鎖定",
-    lockedBody: "完成 3 次完整 5-5 呼吸循環後，將自動解鎖。",
+    breathSuggest: "建議先完成一次呼吸練習，以校準基準反應（非強制）",
     srtTitle: "第一階段 · 純反應測試",
     srtHint: "請在畫面變綠時立即按空白鍵 或 點擊此處 / Tap screen",
     startTest: "開始認知測試",
@@ -78,8 +77,7 @@ const COPY = {
     start: "Start",
     pause: "Pause",
     round: (x: number) => `Round ${x} / 3`,
-    lockedTitle: "Test · Locked",
-    lockedBody: "Finish 3 full 5-5 breath rounds to unlock.",
+    breathSuggest: "Suggested: complete one breath practice first to calibrate baseline (optional)",
     srtTitle: "Stage 1 · Simple Reaction",
     srtHint: "When green, press Space or tap here / Tap screen",
     startTest: "Start Cognitive Test",
@@ -142,6 +140,27 @@ function readScale(element: HTMLElement | null) {
   return Number.isFinite(sx) ? sx : MIN_SCALE;
 }
 
+/** Kept for rollback; gated by SHOW_LOCK (default false). */
+const SHOW_LOCK = false;
+
+function LockIcon() {
+  return (
+    <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 text-slate-500">
+      <svg
+        aria-hidden
+        viewBox="0 0 24 24"
+        className="h-5 w-5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      >
+        <path d="M7 11V8a5 5 0 0 1 10 0v3" />
+        <rect x="5" y="11" width="14" height="10" rx="2" />
+      </svg>
+    </div>
+  );
+}
+
 export default function Home() {
   const [lang, setLang] = useState<Lang>("zh");
   const t = COPY[lang];
@@ -153,7 +172,8 @@ export default function Home() {
   const [cycles, setCycles] = useState(0);
   const [scale, setScale] = useState(MIN_SCALE);
   const [transitionMs, setTransitionMs] = useState(300);
-  const [unlocked, setUnlocked] = useState(false);
+  const [completedBreathingBeforeTest, setCompletedBreathingBeforeTest] =
+    useState(false);
 
   const [sessionStage, setSessionStage] = useState<SessionStage>("srt");
   const [reactionPhase, setReactionPhase] = useState<ReactionPhase>("ready");
@@ -258,7 +278,7 @@ export default function Home() {
       if (nextCycles >= TARGET_CYCLES) {
         runningRef.current = false;
         setIsRunning(false);
-        setUnlocked(true);
+        setCompletedBreathingBeforeTest(true);
         phaseRef.current = "inhale";
         remainingRef.current = PHASE_MS.inhale;
         setPhase("inhale");
@@ -473,8 +493,6 @@ export default function Home() {
   }, [beginStroopStimulus, sessionStage, stroopPhase]);
 
   useEffect(() => {
-    if (!unlocked) return;
-
     const onKeyDown = (event: KeyboardEvent) => {
       const stage = sessionStageRef.current;
 
@@ -512,7 +530,7 @@ export default function Home() {
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [unlocked]);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -562,10 +580,12 @@ export default function Home() {
       : null;
   const tallyHref =
     avgSrt !== null && rawInterference !== null && acc !== null
-      ? `${TALLY_FORM_URL}?avg_srt=${avgSrt}&interference=${rawInterference}&acc=${acc}&lang=${lang}`
+      ? `${TALLY_FORM_URL}?avg_srt=${avgSrt}&interference=${rawInterference}&acc=${acc}&lang=${lang}&calibrated=${completedBreathingBeforeTest ? 1 : 0}`
       : TALLY_FORM_URL;
 
   const currentStroop = stroopTrials[stroopIndex];
+  const breathVisibleOnMobile =
+    sessionStage === "srt" && reactionPhase === "ready";
 
   return (
     <div className="relative flex min-h-full flex-1 flex-col bg-[#0f172a] text-[#f8fafc]">
@@ -609,7 +629,7 @@ export default function Home() {
       >
         <section
           className={`flex-col items-center justify-center rounded-3xl border border-white/5 bg-white/[0.03] px-4 py-5 text-center sm:px-6 sm:py-10 ${
-            unlocked ? "hidden sm:flex" : "flex"
+            breathVisibleOnMobile ? "flex" : "hidden sm:flex"
           }`}
         >
           <p className="text-[11px] tracking-[0.35em] text-slate-400">{t.breathTitle}</p>
@@ -695,33 +715,22 @@ export default function Home() {
               : "rounded-3xl border border-white/5 bg-white/[0.03] px-4 py-5 sm:min-h-[28rem] sm:flex-none sm:px-6 sm:py-10"
           }`}
         >
-          {!unlocked ? (
+          {sessionStage === "srt" && reactionPhase === "ready" ? (
             <div className="flex flex-col items-center justify-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 text-slate-500">
-                <svg
-                  aria-hidden
-                  viewBox="0 0 24 24"
-                  className="h-5 w-5"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                >
-                  <path d="M7 11V8a5 5 0 0 1 10 0v3" />
-                  <rect x="5" y="11" width="14" height="10" rx="2" />
-                </svg>
-              </div>
-              <p className="mt-5 text-xs tracking-[0.32em] text-slate-400">{t.lockedTitle}</p>
-              <p className="mt-3 max-w-xs text-sm leading-6 text-slate-500">{t.lockedBody}</p>
-            </div>
-          ) : sessionStage === "srt" && reactionPhase === "ready" ? (
-            <div className="flex flex-col items-center justify-center">
-              <p className="text-[11px] tracking-[0.35em] text-slate-400">{t.srtTitle}</p>
+              {SHOW_LOCK ? <LockIcon /> : null}
+              <p className="max-w-sm text-xs leading-5 text-zinc-400">
+                {t.breathSuggest}
+              </p>
+              <p className="mt-5 text-[11px] tracking-[0.35em] text-slate-400">
+                {t.srtTitle}
+              </p>
               <p className="mt-5 max-w-md text-base font-medium leading-7 tracking-wide text-sky-200">
                 {t.srtHint}
               </p>
               <button
                 type="button"
                 onClick={startReactionTest}
+                disabled={false}
                 className="mt-10 min-h-16 rounded-full bg-sky-300 px-10 py-4 text-slate-900 shadow-[0_0_48px_rgba(125,211,252,0.35)] transition hover:bg-sky-200"
               >
                 <span className="block text-sm font-semibold tracking-[0.18em]">
@@ -860,6 +869,7 @@ export default function Home() {
               interference={rawInterference}
               acc={acc}
               reportAt={reportAt}
+              completedBreathingBeforeTest={completedBreathingBeforeTest}
             />
           ) : null}
         </section>

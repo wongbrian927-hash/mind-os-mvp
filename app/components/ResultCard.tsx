@@ -2,17 +2,17 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import { toBlob, toPng } from "html-to-image";
+import type { BenchmarkData } from "@/types/benchmark";
 
 export type ResultCardLang = "zh" | "en";
 export type CardAspect = "story" | "square";
 export type TierLevel = 1 | 2 | 3 | 4;
 
-export type ResultCardProps = {
+export type ResultCardProps = Pick<
+  BenchmarkData,
+  "avgSrt" | "interference" | "acc" | "reportAt" | "completedBreathingBeforeTest"
+> & {
   lang: ResultCardLang;
-  avgSrt: number;
-  interference: number;
-  acc: number;
-  reportAt: Date;
   onSaved?: () => void;
 };
 
@@ -535,6 +535,7 @@ export default function ResultCard({
   interference,
   acc,
   reportAt,
+  completedBreathingBeforeTest,
   onSaved,
 }: ResultCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
@@ -553,6 +554,14 @@ export default function ResultCard({
       }),
     [acc, avgSrt, interference, lang],
   );
+  const protocolLabel =
+    lang === "zh"
+      ? completedBreathingBeforeTest
+        ? "已完成呼吸校準後測得"
+        : "未經呼吸校準（基準測試）"
+      : completedBreathingBeforeTest
+        ? "Protocol: Post-Calibration (5-5)"
+        : "Protocol: Baseline Direct";
   const sessionId = useMemo(
     () => buildSessionId(avgSrt, interference, acc, reportAt),
     [acc, avgSrt, interference, reportAt],
@@ -830,6 +839,12 @@ export default function ResultCard({
                 className="font-mono text-[11px] tracking-[0.08em] text-zinc-700"
               >
                 {tier.statusSecondary}
+              </p>
+              <p
+                data-export-mono
+                className="font-mono text-[11px] tracking-[0.08em] text-zinc-700"
+              >
+                {protocolLabel}
               </p>
             </div>
             <p
