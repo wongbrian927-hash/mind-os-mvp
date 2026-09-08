@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Mind OS",
-  description: "4-7-8 呼吸與專注反應測試 MVP",
+  description: "5-5 諧振呼吸與專注反應測試 MVP",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

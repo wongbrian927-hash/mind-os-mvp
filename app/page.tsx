@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import ResultCard from "@/app/components/ResultCard";
 
 type Lang = "zh" | "en";
-type BreathPhase = "inhale" | "hold" | "exhale";
+type BreathPhase = "inhale" | "exhale";
 type ReactionPhase = "ready" | "buffer" | "waiting" | "go" | "recorded" | "too_soon";
 type SessionStage = "srt" | "stroop" | "summary";
 type StroopPhase = "intro" | "stimulus" | "gap";
@@ -27,14 +27,14 @@ const REACTION_TRIALS = 3;
 const STROOP_COUNT = 4;
 const BUFFER_SECONDS = 2;
 const STROOP_BUFFER_SECONDS = 3;
-const MIN_SCALE = 0.85;
-const MAX_SCALE = 1.2;
+const MIN_SCALE = 1;
+const MAX_SCALE = 1.5;
+const PHASE_DURATION_MS = 5000;
 const TALLY_FORM_URL = "https://tally.so/r/0QWeRA";
 
 const PHASE_MS: Record<BreathPhase, number> = {
-  inhale: 4000,
-  hold: 7000,
-  exhale: 8000,
+  inhale: PHASE_DURATION_MS,
+  exhale: PHASE_DURATION_MS,
 };
 
 const INK_HEX: Record<InkColor, string> = {
@@ -45,13 +45,13 @@ const INK_HEX: Record<InkColor, string> = {
 const COPY = {
   zh: {
     subtitle: "呼吸 · 專注 · 反應",
-    breathTitle: "4-7-8 呼吸計時器",
-    phase: { inhale: "吸氣", hold: "閉氣", exhale: "呼氣" } as Record<BreathPhase, string>,
+    breathTitle: "5-5 諧振呼吸",
+    phase: { inhale: "吸氣", exhale: "呼氣" } as Record<BreathPhase, string>,
     start: "開始",
     pause: "暫停",
     round: (x: number) => `循環 ${x} / 3`,
     lockedTitle: "認知測試 · 已鎖定",
-    lockedBody: "完成 3 次完整 4-7-8 呼吸循環後，將自動解鎖。",
+    lockedBody: "完成 3 次完整 5-5 呼吸循環後，將自動解鎖。",
     srtTitle: "第一階段 · 純反應測試",
     srtHint: "請在畫面變綠時立即按空白鍵 或 點擊此處 / Tap screen",
     startTest: "開始認知測試",
@@ -73,13 +73,13 @@ const COPY = {
   },
   en: {
     subtitle: "Breathe · Focus · React",
-    breathTitle: "4-7-8 Breath",
-    phase: { inhale: "In", hold: "Hold", exhale: "Out" } as Record<BreathPhase, string>,
+    breathTitle: "5-5 Coherence Breath",
+    phase: { inhale: "In", exhale: "Out" } as Record<BreathPhase, string>,
     start: "Start",
     pause: "Pause",
     round: (x: number) => `Round ${x} / 3`,
     lockedTitle: "Test · Locked",
-    lockedBody: "Finish 3 full 4-7-8 rounds to unlock.",
+    lockedBody: "Finish 3 full 5-5 breath rounds to unlock.",
     srtTitle: "Stage 1 · Simple Reaction",
     srtHint: "When green, press Space or tap here / Tap screen",
     startTest: "Start Cognitive Test",
@@ -149,7 +149,7 @@ export default function Home() {
   const [isRunning, setIsRunning] = useState(false);
   const [breathStarted, setBreathStarted] = useState(false);
   const [phase, setPhase] = useState<BreathPhase>("inhale");
-  const [secondsLeft, setSecondsLeft] = useState(4);
+  const [secondsLeft, setSecondsLeft] = useState(5);
   const [cycles, setCycles] = useState(0);
   const [scale, setScale] = useState(MIN_SCALE);
   const [transitionMs, setTransitionMs] = useState(300);
@@ -201,18 +201,8 @@ export default function Home() {
   };
 
   const applyPhaseVisual = useCallback((nextPhase: BreathPhase, remaining: number) => {
-    if (nextPhase === "inhale") {
-      setTransitionMs(remaining);
-      setScale(MAX_SCALE);
-      return;
-    }
-    if (nextPhase === "hold") {
-      setTransitionMs(300);
-      setScale(MAX_SCALE);
-      return;
-    }
     setTransitionMs(remaining);
-    setScale(MIN_SCALE);
+    setScale(nextPhase === "inhale" ? MAX_SCALE : MIN_SCALE);
   }, []);
 
   const scheduleBreathTick = useCallback(() => {
@@ -234,7 +224,22 @@ export default function Home() {
       phaseStartedAtRef.current = performance.now();
       setPhase(nextPhase);
       setSecondsLeft(Math.max(1, Math.ceil(remaining / 1000)));
-      applyPhaseVisual(nextPhase, remaining);
+
+      const isFreshPhase = remaining >= PHASE_MS[nextPhase];
+      if (isFreshPhase) {
+        // Snap to phase start scale, then ease to end scale over 5s.
+        setTransitionMs(0);
+        setScale(nextPhase === "inhale" ? MIN_SCALE : MAX_SCALE);
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => {
+            applyPhaseVisual(nextPhase, remaining);
+          });
+        });
+      } else {
+        // Resume from paused mid-phase scale toward the phase end-state.
+        applyPhaseVisual(nextPhase, remaining);
+      }
+
       clearTimer(breathTimerRef);
       breathTimerRef.current = window.setTimeout(() => {
         advanceBreathRef.current();
@@ -257,7 +262,7 @@ export default function Home() {
         phaseRef.current = "inhale";
         remainingRef.current = PHASE_MS.inhale;
         setPhase("inhale");
-        setSecondsLeft(4);
+        setSecondsLeft(5);
         setTransitionMs(300);
         setScale(MIN_SCALE);
         setBreathStarted(false);
@@ -268,7 +273,7 @@ export default function Home() {
       startBreathPhase("inhale");
       return;
     }
-    startBreathPhase(current === "inhale" ? "hold" : "exhale");
+    startBreathPhase("exhale");
   }, [startBreathPhase]);
 
   advanceBreathRef.current = advanceBreath;
@@ -612,20 +617,16 @@ export default function Home() {
           <div className="relative mx-auto mt-6 flex h-64 w-64 flex-col items-center justify-center overflow-visible sm:mt-10 sm:h-72 sm:w-72">
             <div
               ref={orbRef}
-              className={`absolute inset-0 m-auto h-48 w-48 rounded-full transition-transform duration-300 ${
-                phase === "hold" && isRunning ? "animate-pulse" : ""
-              }`}
+              className="absolute inset-0 m-auto h-48 w-48 rounded-full will-change-transform"
               style={{
                 transform: `scale(${scale})`,
                 transformOrigin: "center center",
+                transitionProperty: "transform",
                 transitionDuration: `${transitionMs}ms`,
                 transitionTimingFunction: "ease-in-out",
                 background:
                   "radial-gradient(circle at 30% 30%, rgba(125,211,252,0.95), rgba(14,165,233,0.35) 58%, rgba(99,102,241,0.2) 100%)",
-                boxShadow:
-                  phase === "hold" && isRunning
-                    ? "0 0 96px rgba(56,189,248,0.55)"
-                    : "0 0 80px rgba(56,189,248,0.28)",
+                boxShadow: "0 0 80px rgba(56,189,248,0.28)",
               }}
             />
             <div className="pointer-events-none relative z-10 flex flex-col items-center justify-center">
@@ -642,8 +643,8 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="mt-5 flex items-center justify-center gap-4 text-[11px] tracking-[0.2em] text-slate-500 sm:mt-8 sm:gap-8 sm:tracking-[0.28em]">
-            {(["inhale", "hold", "exhale"] as BreathPhase[]).map((item) => (
+          <div className="mt-5 flex items-center justify-center gap-8 text-[11px] tracking-[0.2em] text-slate-500 sm:mt-8 sm:tracking-[0.28em]">
+            {(["inhale", "exhale"] as BreathPhase[]).map((item) => (
               <span
                 key={item}
                 className={phase === item && breathStarted ? "text-sky-200" : "text-slate-600"}

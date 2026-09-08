@@ -53,7 +53,7 @@ const COPY = {
     tier: "FOCUS TIER",
     interference: "INTERFERENCE LOSS",
     accuracy: "FOCUS ACCURACY",
-    breath: "4-7-8 CALIBRATION",
+    breath: "5-5 CALIBRATION",
     status: "STATUS LABELS",
     watermark: "Mind OS · Bio-Quant Protocol",
   },
@@ -69,7 +69,7 @@ const COPY = {
     tier: "FOCUS TIER",
     interference: "INTERFERENCE LOSS",
     accuracy: "FOCUS ACCURACY",
-    breath: "4-7-8 CALIBRATION",
+    breath: "5-5 CALIBRATION",
     status: "STATUS LABELS",
     watermark: "Mind OS · Bio-Quant Protocol",
   },
@@ -211,8 +211,8 @@ export function getTierConfig(data: TierInput): TierConfig {
     statusPrimary: "Trapezius: Guarded",
     statusSecondary: "Focus Index: Recharge",
     diagnosis: isZh
-      ? "大腦處於疲勞狀態，建議再做一次 4-7-8 呼吸深層重置。"
-      : "The system is fatigued. Another 4-7-8 round is indicated for deep reset.",
+      ? "大腦處於疲勞狀態，建議再做一次 5-5 諧振呼吸深層重置。"
+      : "The system is fatigued. Another 5-5 coherence round is indicated for deep reset.",
     symbol: "slash",
     interferenceLabel:
       interference > 80
