@@ -283,13 +283,18 @@ function isIos() {
   );
 }
 
-const EXPORT_STORY = { width: 1080, height: 1920 } as const;
-const EXPORT_SQUARE = { width: 1080, height: 1080 } as const;
+const EXPORT_WIDTH = 1080;
+const EXPORT_STORY_HEIGHT = 1920;
+const EXPORT_SQUARE_HEIGHT = 1080;
 
-function getExportPixelRatio() {
+function getExportPixelRatio(layoutWidth: number, layoutHeight: number) {
   const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
-  // Retina floor at 2×, boost ~1.5×, hard-cap 3× to stay under common iOS canvas limits.
-  return Math.min(3, Math.max(2, dpr) * 1.5);
+  let pixelRatio = Math.min(3, Math.max(2, dpr) * 1.5);
+  const longEdge = Math.max(layoutWidth, layoutHeight) * pixelRatio;
+  if (longEdge > 4096) {
+    pixelRatio = 4096 / Math.max(layoutWidth, layoutHeight);
+  }
+  return pixelRatio;
 }
 
 async function waitForFontsAndPaint() {
@@ -305,52 +310,151 @@ async function waitForFontsAndPaint() {
   });
 }
 
-function createExportMount(source: HTMLElement, width: number, height: number) {
+function applyExportLayout(clone: HTMLElement, aspect: CardAspect) {
+  const height = aspect === "story" ? EXPORT_STORY_HEIGHT : EXPORT_SQUARE_HEIGHT;
+  const padY = aspect === "story" ? 96 : 72;
+  const padX = 80;
+
+  clone.setAttribute("data-export-root", "true");
+  clone.className = clone.className
+    .replace(/aspect-\[9\/16\]/g, "")
+    .replace(/aspect-square/g, "");
+
+  Object.assign(clone.style, {
+    width: `${EXPORT_WIDTH}px`,
+    height: `${height}px`,
+    maxWidth: `${EXPORT_WIDTH}px`,
+    minHeight: "0",
+    aspectRatio: "auto",
+    position: "relative",
+    display: "block",
+    overflow: "hidden",
+    transform: "none",
+    margin: "0",
+    boxSizing: "border-box",
+  });
+
+  const shell = clone.querySelector("[data-card-shell]") as HTMLElement | null;
+  if (shell) {
+    shell.classList.remove("absolute", "inset-0");
+    Object.assign(shell.style, {
+      position: "relative",
+      inset: "auto",
+      top: "0",
+      right: "0",
+      bottom: "0",
+      left: "0",
+      display: "flex",
+      flexDirection: "column",
+      justifyContent: "space-between",
+      width: "100%",
+      height: "100%",
+      minHeight: "0",
+      maxHeight: "100%",
+      padding: `${padY}px ${padX}px`,
+      boxSizing: "border-box",
+      margin: "0",
+    });
+  }
+
+  // Drop preview-only vertical margins; spacing comes from justify-between.
+  clone.querySelectorAll("[data-card-block]").forEach((node) => {
+    const el = node as HTMLElement;
+    el.style.marginTop = "0";
+    el.style.marginBottom = "0";
+    el.style.flexShrink = "0";
+  });
+
+  const latency = clone.querySelector("[data-export-latency]") as HTMLElement | null;
+  if (latency) {
+    latency.style.fontSize = aspect === "story" ? "118px" : "96px";
+    latency.style.lineHeight = "1";
+    latency.style.letterSpacing = "-0.04em";
+  }
+
+  const latencyUnit = clone.querySelector("[data-export-latency-unit]") as HTMLElement | null;
+  if (latencyUnit) {
+    latencyUnit.style.fontSize = "28px";
+  }
+
+  clone.querySelectorAll("[data-export-label]").forEach((node) => {
+    const el = node as HTMLElement;
+    el.style.fontSize = "18px";
+    el.style.letterSpacing = "0.28em";
+  });
+
+  clone.querySelectorAll("[data-export-metric]").forEach((node) => {
+    const el = node as HTMLElement;
+    el.style.fontSize = aspect === "story" ? "64px" : "52px";
+    el.style.lineHeight = "1.05";
+  });
+
+  clone.querySelectorAll("[data-export-title]").forEach((node) => {
+    const el = node as HTMLElement;
+    el.style.fontSize = "28px";
+  });
+
+  clone.querySelectorAll("[data-export-body]").forEach((node) => {
+    const el = node as HTMLElement;
+    el.style.fontSize = "22px";
+    el.style.lineHeight = "1.55";
+  });
+
+  clone.querySelectorAll("[data-export-mono]").forEach((node) => {
+    const el = node as HTMLElement;
+    el.style.fontSize = "20px";
+  });
+
+  clone.querySelectorAll("[data-export-pill]").forEach((node) => {
+    const el = node as HTMLElement;
+    el.style.fontSize = "16px";
+    el.style.padding = "8px 14px";
+  });
+
+  const bar = clone.querySelector("[data-export-bar]") as HTMLElement | null;
+  if (bar) {
+    bar.style.height = "4px";
+    bar.style.marginTop = "28px";
+    bar.style.marginBottom = "8px";
+  }
+
+  return { width: EXPORT_WIDTH, height };
+}
+
+function createExportMount(source: HTMLElement, aspect: CardAspect) {
   const mount = document.createElement("div");
   mount.setAttribute("data-mind-os-export-mount", "true");
   mount.style.cssText = [
     "position:fixed",
-    "left:-10000px",
+    "left:-12000px",
     "top:0",
-    "width:" + width + "px",
-    "height:" + height + "px",
-    "overflow:hidden",
+    "width:1080px",
+    "height:auto",
+    "overflow:visible",
     "pointer-events:none",
     "opacity:1",
     "z-index:-1",
   ].join(";");
 
   const clone = source.cloneNode(true) as HTMLElement;
-  clone.style.width = `${width}px`;
-  clone.style.height = `${height}px`;
-  clone.style.maxWidth = `${width}px`;
-  clone.style.aspectRatio = "auto";
-  clone.style.position = "relative";
-  clone.style.transform = "none";
-  clone.style.margin = "0";
-
+  const size = applyExportLayout(clone, aspect);
+  mount.style.width = `${size.width}px`;
+  mount.style.height = `${size.height}px`;
   mount.appendChild(clone);
   document.body.appendChild(mount);
-  return { mount, clone };
+  return { mount, clone, size };
 }
 
 async function renderExportBlob(
   source: HTMLElement,
   aspect: CardAspect,
 ): Promise<Blob> {
-  const size = aspect === "story" ? EXPORT_STORY : EXPORT_SQUARE;
-  const { mount, clone } = createExportMount(source, size.width, size.height);
+  const { mount, clone, size } = createExportMount(source, aspect);
 
   try {
     await waitForFontsAndPaint();
 
-    let pixelRatio = getExportPixelRatio();
-    // Keep physical canvas under ~4096 on the long edge for older iOS Safari.
-    const longEdge = Math.max(size.width, size.height) * pixelRatio;
-    if (longEdge > 4096) {
-      pixelRatio = 4096 / Math.max(size.width, size.height);
-    }
-
+    const pixelRatio = getExportPixelRatio(size.width, size.height);
     const options = {
       width: size.width,
       height: size.height,
@@ -360,6 +464,9 @@ async function renderExportBlob(
       style: {
         width: `${size.width}px`,
         height: `${size.height}px`,
+        maxWidth: `${size.width}px`,
+        minHeight: "0px",
+        aspectRatio: "auto",
         transform: "none",
         margin: "0",
       },
@@ -505,46 +612,78 @@ export default function ResultCard({
         }`}
         style={{ fontFamily: "var(--font-geist-sans), Helvetica, Arial, sans-serif" }}
       >
-        <div className="absolute inset-0 flex flex-col px-7 py-8 sm:px-8 sm:py-9">
-          <header className="flex items-start justify-between gap-4 border-b border-zinc-800/10 pb-5">
+        <div
+          data-card-shell
+          className="absolute inset-0 flex h-full flex-col justify-between px-7 py-8 sm:px-8 sm:py-9"
+        >
+          <header
+            data-card-block
+            className="flex items-start justify-between gap-4 border-b border-zinc-800/10 pb-4"
+          >
             <div>
-              <p className="font-mono text-[10px] tracking-[0.32em] text-zinc-500">
+              <p
+                data-export-label
+                className="font-mono text-[10px] tracking-[0.32em] text-zinc-500"
+              >
                 {t.brand}
               </p>
-              <p className="mt-1 font-mono text-[9px] tracking-[0.28em] text-zinc-400">
+              <p
+                data-export-mono
+                className="mt-1 font-mono text-[9px] tracking-[0.28em] text-zinc-400"
+              >
                 {t.protocol}
               </p>
             </div>
             <div className="text-right">
-              <p className="font-mono text-[9px] tracking-[0.16em] text-zinc-500">
+              <p
+                data-export-mono
+                className="font-mono text-[9px] tracking-[0.16em] text-zinc-500"
+              >
                 {localStamp}
               </p>
-              <p className="mt-1 font-mono text-[8px] tracking-[0.14em] text-zinc-400">
+              <p
+                data-export-mono
+                className="mt-1 font-mono text-[8px] tracking-[0.14em] text-zinc-400"
+              >
                 {utcStamp}
               </p>
-              <p className="mt-2 font-mono text-[9px] tracking-[0.18em] text-zinc-600">
+              <p
+                data-export-mono
+                className="mt-2 font-mono text-[9px] tracking-[0.18em] text-zinc-600"
+              >
                 {sessionId}
               </p>
             </div>
           </header>
 
-          <section className="mt-8">
+          <section data-card-block>
             <div className="flex items-start justify-between gap-3">
-              <p className="text-[8px] font-medium uppercase tracking-[0.28em] text-zinc-400">
+              <p
+                data-export-label
+                className="text-[8px] font-medium uppercase tracking-[0.28em] text-zinc-400"
+              >
                 {t.reaction}
               </p>
               <TierSymbol symbol={tier.symbol} color={tier.accent} />
             </div>
             <p
+              data-export-latency
               className="mt-2 font-mono text-6xl font-medium tracking-tight text-[#0F1115] sm:text-7xl"
               style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
             >
               {avgSrt}
-              <span className="ml-2 align-baseline font-sans text-sm font-normal tracking-[0.18em] text-zinc-400">
+              <span
+                data-export-latency-unit
+                className="ml-2 align-baseline font-sans text-sm font-normal tracking-[0.18em] text-zinc-400"
+              >
                 ms
               </span>
             </p>
-            <div className="mt-5 h-[2px] w-full" style={{ backgroundColor: tier.accentSoft }}>
+            <div
+              data-export-bar
+              className="mt-5 h-[2px] w-full"
+              style={{ backgroundColor: tier.accentSoft }}
+            >
               <div
                 className="h-full transition-[width] duration-500"
                 style={{
@@ -554,14 +693,25 @@ export default function ResultCard({
               />
             </div>
             <div className="mt-4 flex items-center justify-between gap-3">
-              <p className="text-[8px] uppercase tracking-[0.24em] text-zinc-400">{t.tier}</p>
+              <p
+                data-export-label
+                className="text-[8px] uppercase tracking-[0.24em] text-zinc-400"
+              >
+                {t.tier}
+              </p>
               <div className="flex items-center gap-2">
                 <span
                   className="inline-block h-1.5 w-1.5 rounded-full"
                   style={{ backgroundColor: tier.accent, boxShadow: tier.glow }}
                 />
-                <span className="text-sm tracking-wide text-zinc-800">{tier.title}</span>
                 <span
+                  data-export-title
+                  className="text-sm tracking-wide text-zinc-800"
+                >
+                  {tier.title}
+                </span>
+                <span
+                  data-export-pill
                   className="rounded-full border px-2 py-0.5 font-mono text-[9px] tracking-[0.16em]"
                   style={{
                     borderColor: `${tier.accent}55`,
@@ -572,17 +722,27 @@ export default function ResultCard({
                 </span>
               </div>
             </div>
-            <p className="mt-2 font-mono text-[9px] tracking-[0.2em] text-zinc-400">
+            <p
+              data-export-mono
+              className="mt-2 font-mono text-[9px] tracking-[0.2em] text-zinc-400"
+            >
               {tier.titleEn}
             </p>
           </section>
 
-          <section className="mt-8 grid grid-cols-2 gap-5 border-y border-zinc-800/10 py-6">
+          <section
+            data-card-block
+            className="grid grid-cols-2 gap-5 border-y border-zinc-800/10 py-5"
+          >
             <div>
-              <p className="text-[8px] uppercase tracking-[0.22em] text-zinc-400">
+              <p
+                data-export-label
+                className="text-[8px] uppercase tracking-[0.22em] text-zinc-400"
+              >
                 {t.interference}
               </p>
               <p
+                data-export-metric
                 className="mt-2 font-mono text-3xl tracking-tight text-[#0F1115]"
                 style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
               >
@@ -591,15 +751,19 @@ export default function ResultCard({
                   ms
                 </span>
               </p>
-              <p className="mt-2 text-[10px] leading-4 text-zinc-500">
+              <p data-export-mono className="mt-2 text-[10px] leading-4 text-zinc-500">
                 {tier.interferenceLabel}
               </p>
             </div>
             <div>
-              <p className="text-[8px] uppercase tracking-[0.22em] text-zinc-400">
+              <p
+                data-export-label
+                className="text-[8px] uppercase tracking-[0.22em] text-zinc-400"
+              >
                 {t.accuracy}
               </p>
               <p
+                data-export-metric
                 className="mt-2 font-mono text-3xl tracking-tight text-[#0F1115]"
                 style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
               >
@@ -608,14 +772,22 @@ export default function ResultCard({
                   %
                 </span>
               </p>
-              <p className="mt-2 text-[10px] leading-4 text-zinc-500">ACC</p>
+              <p data-export-mono className="mt-2 text-[10px] leading-4 text-zinc-500">
+                ACC
+              </p>
             </div>
           </section>
 
-          <section className="mt-6">
-            <p className="text-[8px] uppercase tracking-[0.22em] text-zinc-400">{t.breath}</p>
+          <section data-card-block>
+            <p
+              data-export-label
+              className="text-[8px] uppercase tracking-[0.22em] text-zinc-400"
+            >
+              {t.breath}
+            </p>
             <div className="mt-3 flex items-end justify-between">
               <p
+                data-export-metric
                 className="font-mono text-2xl tracking-tight"
                 style={{
                   fontFamily: "var(--font-geist-mono), ui-monospace, monospace",
@@ -639,22 +811,44 @@ export default function ResultCard({
             </div>
           </section>
 
-          <section className="mt-auto pt-8">
-            <p className="text-[8px] uppercase tracking-[0.22em] text-zinc-400">{t.status}</p>
+          <section data-card-block>
+            <p
+              data-export-label
+              className="text-[8px] uppercase tracking-[0.22em] text-zinc-400"
+            >
+              {t.status}
+            </p>
             <div className="mt-3 space-y-2">
-              <p className="font-mono text-[11px] tracking-[0.08em] text-zinc-700">
+              <p
+                data-export-mono
+                className="font-mono text-[11px] tracking-[0.08em] text-zinc-700"
+              >
                 {tier.statusPrimary}
               </p>
-              <p className="font-mono text-[11px] tracking-[0.08em] text-zinc-700">
+              <p
+                data-export-mono
+                className="font-mono text-[11px] tracking-[0.08em] text-zinc-700"
+              >
                 {tier.statusSecondary}
               </p>
             </div>
-            <p className="mt-5 text-[12px] leading-5 text-zinc-500">{tier.diagnosis}</p>
-            <div className="mt-8 flex items-end justify-between border-t border-zinc-800/10 pt-4">
-              <p className="text-[8px] uppercase tracking-[0.22em] text-zinc-400">
+            <p
+              data-export-body
+              className="mt-4 text-[12px] leading-5 text-zinc-500"
+            >
+              {tier.diagnosis}
+            </p>
+            <div className="mt-5 flex items-end justify-between border-t border-zinc-800/10 pt-4">
+              <p
+                data-export-label
+                className="text-[8px] uppercase tracking-[0.22em] text-zinc-400"
+              >
                 {t.watermark}
               </p>
-              <p className="font-mono text-[9px] tracking-[0.16em] text-zinc-500">
+              <p
+                data-export-mono
+                className="font-mono text-[9px] tracking-[0.16em] text-zinc-500"
+              >
                 {sessionId}
               </p>
             </div>
