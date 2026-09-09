@@ -724,14 +724,11 @@ export default function Home() {
               <p className="mt-5 text-[11px] tracking-[0.35em] text-slate-400">
                 {t.srtTitle}
               </p>
-              <p className="mt-5 max-w-md text-base font-medium leading-7 tracking-wide text-sky-200">
-                {t.srtHint}
-              </p>
               <button
                 type="button"
                 onClick={startReactionTest}
                 disabled={false}
-                className="mt-10 min-h-16 rounded-full bg-sky-300 px-10 py-4 text-slate-900 shadow-[0_0_48px_rgba(125,211,252,0.35)] transition hover:bg-sky-200"
+                className="mt-8 min-h-16 rounded-full bg-sky-300 px-10 py-4 text-slate-900 shadow-[0_0_48px_rgba(125,211,252,0.35)] transition hover:bg-sky-200"
               >
                 <span className="block text-sm font-semibold tracking-[0.18em]">
                   {t.startTest}
