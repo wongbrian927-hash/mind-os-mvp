@@ -9,6 +9,7 @@ import {
   type ApexVariant,
   type TierLevel,
 } from "@/lib/calculateTier";
+import Logo from "@/app/components/Logo";
 
 export type ResultCardLang = "zh" | "en";
 export type CardAspect = "story" | "square";
@@ -333,12 +334,15 @@ export default function ResultCard({
               className={`flex items-start justify-between gap-4 border-b pb-4 ${rule}`}
             >
               <div>
-                <p
-                  data-export-label
-                  className={`font-mono text-[10px] tracking-[0.32em] ${labelSoft}`}
-                >
-                  {t.brand}
-                </p>
+                <div className={`flex items-center gap-2 ${labelSoft}`}>
+                  <Logo size={16} className="shrink-0" />
+                  <p
+                    data-export-label
+                    className="font-mono text-[10px] tracking-[0.32em]"
+                  >
+                    {t.brand}
+                  </p>
+                </div>
                 <p
                   data-export-mono
                   className={`mt-1 font-mono text-[9px] tracking-[0.28em] ${labelMuted}`}
