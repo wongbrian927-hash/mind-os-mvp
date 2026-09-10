@@ -2,6 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import ResultCard from "@/app/components/ResultCard";
+import DevTierMockPanel from "@/app/components/DevTierMockPanel";
+import {
+  MOCK_TIERS,
+  buildMockTrialData,
+  parseMockTierKey,
+  type MockTierKey,
+} from "@/app/dev/mockTiers";
+
+const IS_DEV = process.env.NODE_ENV === "development";
 
 type Lang = "zh" | "en";
 type BreathPhase = "inhale" | "exhale";
@@ -186,6 +195,7 @@ export default function Home() {
   const [stroopIndex, setStroopIndex] = useState(0);
   const [stroopResults, setStroopResults] = useState<StroopResult[]>([]);
   const [reportAt, setReportAt] = useState<Date | null>(null);
+  const [mockSessionId, setMockSessionId] = useState<string | null>(null);
 
   const orbRef = useRef<HTMLDivElement>(null);
   const phaseRef = useRef<BreathPhase>("inhale");
@@ -561,7 +571,48 @@ export default function Home() {
     setStroopPhase("intro");
     setBufferCount(BUFFER_SECONDS);
     setReportAt(null);
+    setMockSessionId(null);
   };
+
+  const injectMockTier = useCallback(
+    (key: MockTierKey) => {
+      if (!IS_DEV) return;
+      const payload = MOCK_TIERS[key];
+      const { latencies: nextLatencies, stroopResults: nextStroop } =
+        buildMockTrialData(payload);
+
+      clearTimer(breathTimerRef);
+      clearTimer(tickTimerRef);
+      clearTimer(waitTimerRef);
+      runningRef.current = false;
+      setIsRunning(false);
+      setBreathStarted(false);
+
+      latenciesRef.current = nextLatencies;
+      stroopResultsRef.current = nextStroop;
+      sessionStageRef.current = "summary";
+      reactionPhaseRef.current = "ready";
+      stroopPhaseRef.current = "intro";
+
+      setLatencies(nextLatencies);
+      setLastLatency(nextLatencies[nextLatencies.length - 1] ?? null);
+      setStroopResults(nextStroop);
+      setCompletedBreathingBeforeTest(payload.completedBreathingBeforeTest);
+      setMockSessionId(payload.sessionId);
+      setReportAt(new Date());
+      setSessionStage("summary");
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!IS_DEV) return;
+    const key = parseMockTierKey(
+      new URLSearchParams(window.location.search).get("mock"),
+    );
+    if (!key) return;
+    injectMockTier(key);
+  }, [injectMockTier]);
 
   const avgSrt =
     latencies.length === REACTION_TRIALS ? Math.round(mean(latencies)) : null;
@@ -867,6 +918,7 @@ export default function Home() {
               acc={acc}
               reportAt={reportAt}
               completedBreathingBeforeTest={completedBreathingBeforeTest}
+              sessionIdOverride={mockSessionId ?? undefined}
             />
           ) : null}
         </section>
@@ -890,6 +942,8 @@ export default function Home() {
           </div>
         ) : null}
       </main>
+
+      {IS_DEV ? <DevTierMockPanel onInject={injectMockTier} /> : null}
     </div>
   );
 }

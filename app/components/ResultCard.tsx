@@ -3,10 +3,15 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { toBlob, toPng } from "html-to-image";
 import type { BenchmarkData } from "@/types/benchmark";
+import {
+  getTierConfig,
+  interferenceDisplay,
+  type TierLevel,
+} from "@/lib/calculateTier";
 
 export type ResultCardLang = "zh" | "en";
 export type CardAspect = "story" | "square";
-export type TierLevel = 1 | 2 | 3 | 4;
+export type { TierLevel };
 
 export type ResultCardProps = Pick<
   BenchmarkData,
@@ -14,30 +19,8 @@ export type ResultCardProps = Pick<
 > & {
   lang: ResultCardLang;
   onSaved?: () => void;
-};
-
-type TierInput = {
-  latency: number;
-  interference: number;
-  accuracy: number;
-  lang: ResultCardLang;
-};
-
-type TierConfig = {
-  level: TierLevel;
-  accent: string;
-  accentSoft: string;
-  glow: string;
-  progress: number;
-  title: string;
-  titleEn: string;
-  percentLabel: string;
-  statusPrimary: string;
-  statusSecondary: string;
-  diagnosis: string;
-  symbol: "diamond" | "circle" | "triangle" | "slash";
-  interferenceLabel: string;
-  breathLabel: string;
+  /** Dev mock only — forces a fixed session id on the card. */
+  sessionIdOverride?: string;
 };
 
 const COPY = {
@@ -98,180 +81,17 @@ function buildSessionId(avgSrt: number, interference: number, acc: number, at: D
   return `MOS-${hex.slice(0, 4)}-${hex.slice(4)}`;
 }
 
-function resolveTierLevel(latency: number, interference: number, accuracy: number): TierLevel {
-  if (latency >= 360 || accuracy < 50) return 4;
-  if (latency >= 290 || interference > 80 || accuracy < 75) return 3;
-  if (latency >= 240 || interference > 40) return 2;
-  return 1;
-}
-
-function interferenceDisplay(ms: number) {
-  if (ms <= 0) return "0";
-  return `+${ms}`;
-}
-
-/** Map Latency + Interference + Accuracy → linked visual / clinical state. */
-export function getTierConfig(data: TierInput): TierConfig {
-  const { latency, interference, accuracy, lang } = data;
-  const isZh = lang === "zh";
-  const level = resolveTierLevel(latency, interference, accuracy);
-  const displayLoss = interferenceDisplay(interference);
-
-  if (level === 1) {
-    return {
-      level: 1,
-      accent: "#10B981",
-      accentSoft: "rgba(16,185,129,0.18)",
-      glow: "0 0 10px rgba(16,185,129,0.55)",
-      progress: 0.92,
-      title: isZh ? "超感神經" : "Hyper-Neural",
-      titleEn: "TIER 01",
-      percentLabel: "TOP 5%",
-      statusPrimary: "Trapezius: Decompressed",
-      statusSecondary: "Focus Index: Top 5%",
-      diagnosis: isZh
-        ? "視覺神經衝動傳導迅速，文字衝突抑制達到零損耗閾值。"
-        : "Visual impulse transmission is rapid. Conflict suppression sits at the zero-loss threshold.",
-      symbol: "diamond",
-      interferenceLabel:
-        interference <= 0
-          ? isZh
-            ? "Zero Interference"
-            : "Zero Interference"
-          : isZh
-            ? "極低干擾"
-            : "High Resilience",
-      breathLabel: isZh ? "STABLE" : "STABLE",
-    };
-  }
-
-  if (level === 2) {
-    return {
-      level: 2,
-      accent: "#0EA5E9",
-      accentSoft: "rgba(14,165,233,0.18)",
-      glow: "0 0 10px rgba(14,165,233,0.5)",
-      progress: 0.72,
-      title: isZh ? "敏銳清晰" : "Sharp Clarity",
-      titleEn: "TIER 02",
-      percentLabel: "TOP 30%",
-      statusPrimary: "Trapezius: Neutral",
-      statusSecondary: "Focus Index: Top 30%",
-      diagnosis: isZh
-        ? "視覺傳導維持敏捷，抗干擾濾波在可接受區間內穩定運作。"
-        : "Visual conduction remains sharp. Interference filtering is stable within range.",
-      symbol: "circle",
-      interferenceLabel:
-        interference <= 0
-          ? "Zero Interference"
-          : isZh
-            ? "平衡抑制"
-            : "Balanced Control",
-      breathLabel: isZh ? "ALIGNED" : "ALIGNED",
-    };
-  }
-
-  if (level === 3) {
-    return {
-      level: 3,
-      accent: "#F59E0B",
-      accentSoft: "rgba(245,158,11,0.2)",
-      glow: "0 0 10px rgba(245,158,11,0.5)",
-      progress: 0.48,
-      title: isZh ? "認知負載" : "Cognitive Load",
-      titleEn: "TIER 03",
-      percentLabel: "TOP 60%",
-      statusPrimary: "Trapezius: Elevated",
-      statusSecondary: "Focus Index: Baseline",
-      diagnosis: isZh
-        ? "反應通道尚可，但文字意義干擾上升，抑制控制負載偏高。"
-        : "Response channels remain intact, but semantic interference elevates inhibitory load.",
-      symbol: "triangle",
-      interferenceLabel:
-        interference > 80
-          ? isZh
-            ? "顯著干擾"
-            : "High Load"
-          : isZh
-            ? "中度干擾"
-            : "Moderate Load",
-      breathLabel: isZh ? "DRIFT" : "DRIFT",
-    };
-  }
-
-  return {
-    level: 4,
-    accent: "#E11D48",
-    accentSoft: "rgba(225,29,72,0.18)",
-    glow: "0 0 10px rgba(225,29,72,0.45)",
-    progress: 0.22,
-    title: isZh ? "神經疲勞" : "Neural Fatigue",
-    titleEn: "TIER 04",
-    percentLabel: "RECHARGE",
-    statusPrimary: "Trapezius: Guarded",
-    statusSecondary: "Focus Index: Recharge",
-    diagnosis: isZh
-      ? "大腦處於疲勞狀態，建議再做一次 5-5 諧振呼吸深層重置。"
-      : "The system is fatigued. Another 5-5 coherence round is indicated for deep reset.",
-    symbol: "slash",
-    interferenceLabel:
-      interference > 80
-        ? isZh
-          ? "高負載干擾"
-          : "Overloaded"
-        : isZh
-          ? "疲勞區間"
-          : "Fatigue Band",
-    breathLabel: isZh ? "UNSTABLE" : "UNSTABLE",
-  };
-}
-
-function TierSymbol({
-  symbol,
-  color,
-}: {
-  symbol: TierConfig["symbol"];
-  color: string;
-}) {
-  if (symbol === "diamond") {
-    return (
-      <span
-        aria-hidden
-        className="inline-block h-2.5 w-2.5 rotate-45 border"
-        style={{ borderColor: color, backgroundColor: color }}
-      />
-    );
-  }
-  if (symbol === "circle") {
-    return (
-      <span
-        aria-hidden
-        className="inline-block h-2.5 w-2.5 rounded-full border-2"
-        style={{ borderColor: color }}
-      />
-    );
-  }
-  if (symbol === "triangle") {
-    return (
-      <span
-        aria-hidden
-        className="inline-block"
-        style={{
-          width: 0,
-          height: 0,
-          borderLeft: "5px solid transparent",
-          borderRight: "5px solid transparent",
-          borderBottom: `9px solid ${color}`,
-        }}
-      />
-    );
-  }
+/** Monospace 5-scale diamond gauge: ◆ filled / ◇ hollow. */
+function DiamondGauge({ filled, color }: { filled: number; color: string }) {
+  const cells = Array.from({ length: 5 }, (_, index) => (index < filled ? "◆" : "◇"));
   return (
     <span
       aria-hidden
-      className="inline-block h-3 w-[1.5px] rotate-45"
-      style={{ backgroundColor: color }}
-    />
+      className="inline-flex font-mono text-[11px] tracking-[0.14em]"
+      style={{ color }}
+    >
+      {cells.join(" ")}
+    </span>
   );
 }
 
@@ -360,6 +180,7 @@ export default function ResultCard({
   reportAt,
   completedBreathingBeforeTest,
   onSaved,
+  sessionIdOverride,
 }: ResultCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [aspect, setAspect] = useState<CardAspect>("story");
@@ -374,8 +195,9 @@ export default function ResultCard({
         interference,
         accuracy: acc,
         lang,
+        completedBreathingBeforeTest,
       }),
-    [acc, avgSrt, interference, lang],
+    [acc, avgSrt, completedBreathingBeforeTest, interference, lang],
   );
   const protocolLabel =
     lang === "zh"
@@ -386,8 +208,8 @@ export default function ResultCard({
         ? "Protocol: Post-Calibration (5-5)"
         : "Protocol: Baseline Direct";
   const sessionId = useMemo(
-    () => buildSessionId(avgSrt, interference, acc, reportAt),
-    [acc, avgSrt, interference, reportAt],
+    () => sessionIdOverride ?? buildSessionId(avgSrt, interference, acc, reportAt),
+    [acc, avgSrt, interference, reportAt, sessionIdOverride],
   );
   const localStamp = formatLocalStamp(reportAt);
   const utcStamp = formatUtcStamp(reportAt);
@@ -439,10 +261,14 @@ export default function ResultCard({
 
       <div
         ref={cardRef}
-        className={`relative w-full overflow-hidden border border-zinc-800/10 bg-[#F8F9FA] text-[#0F1115] ${
+        className={`relative w-full overflow-hidden bg-[#F8F9FA] text-[#0F1115] ${
           aspect === "story" ? "aspect-[9/16]" : "aspect-square"
         }`}
-        style={{ fontFamily: "var(--font-geist-sans), Helvetica, Arial, sans-serif" }}
+        style={{
+          fontFamily: "var(--font-geist-sans), Helvetica, Arial, sans-serif",
+          border: `1px solid ${tier.cardBorder}`,
+          boxShadow: tier.cardShadow,
+        }}
       >
         <div
           data-card-shell
@@ -496,11 +322,13 @@ export default function ResultCard({
               >
                 {t.reaction}
               </p>
-              <TierSymbol symbol={tier.symbol} color={tier.accent} />
+              <DiamondGauge filled={tier.diamondFilled} color={tier.accent} />
             </div>
             <p
               data-export-latency
-              className="mt-2 font-mono text-6xl font-medium tracking-tight text-[#0F1115] sm:text-7xl"
+              className={`mt-2 font-mono text-6xl font-medium tracking-tight text-[#0F1115] sm:text-7xl ${
+                tier.isApex ? "drop-shadow-[0_2px_8px_rgba(139,92,246,0.25)]" : ""
+              }`}
               style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
             >
               {avgSrt}
@@ -531,9 +359,9 @@ export default function ResultCard({
               >
                 {t.tier}
               </p>
-              <div className="flex items-center gap-2">
+              <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
                 <span
-                  className="inline-block h-1.5 w-1.5 rounded-full"
+                  className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
                   style={{ backgroundColor: tier.accent, boxShadow: tier.glow }}
                 />
                 <span
@@ -544,10 +372,15 @@ export default function ResultCard({
                 </span>
                 <span
                   data-export-pill
-                  className="rounded-full border px-2 py-0.5 font-mono text-[9px] tracking-[0.16em]"
+                  className={`px-2 py-0.5 font-mono text-[9px] tracking-[0.12em] ${
+                    tier.isApex ? "rounded-sm border-2" : "rounded-full border"
+                  }`}
                   style={{
-                    borderColor: `${tier.accent}55`,
+                    borderColor: tier.isApex ? tier.accent : `${tier.accent}55`,
                     color: tier.accent,
+                    boxShadow: tier.isApex
+                      ? `inset 0 0 0 1px ${tier.accentSoft}`
+                      : undefined,
                   }}
                 >
                   {tier.percentLabel}
@@ -617,7 +450,7 @@ export default function ResultCard({
             >
               {t.breath}
             </p>
-            <div className="mt-3 flex items-end justify-between">
+            <div className="mt-3 flex items-end justify-between gap-3">
               <p
                 data-export-metric
                 className="font-mono text-2xl tracking-tight"
@@ -628,18 +461,7 @@ export default function ResultCard({
               >
                 {tier.breathLabel}
               </p>
-              <div className="flex gap-1.5">
-                {Array.from({ length: 4 }).map((_, index) => (
-                  <span
-                    key={index}
-                    className="h-1.5 w-1.5 rounded-full"
-                    style={{
-                      backgroundColor:
-                        index < tier.level ? tier.accent : "rgba(24,24,27,0.15)",
-                    }}
-                  />
-                ))}
-              </div>
+              <DiamondGauge filled={tier.diamondFilled} color={tier.accent} />
             </div>
           </section>
 
