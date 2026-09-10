@@ -5,7 +5,8 @@ interface LogoProps {
 
 /**
  * Mind OS official mark — The Quant Monad.
- * Chamfered metrology frame + outline diamond with nucleus focus.
+ * Mathematically symmetric chamfered octagon + outline diamond + nucleus.
+ * ViewBox: 0 0 32 32
  */
 export default function Logo({ size = 24, className }: LogoProps) {
   return (
@@ -18,61 +19,42 @@ export default function Logo({ size = 24, className }: LogoProps) {
       className={className}
       aria-hidden
       focusable="false"
+      shapeRendering="geometricPrecision"
     >
-      {/* Chamfered outer frame — open gaps at top/bottom center */}
+      {/* Symmetric chamfered octagon frame */}
       <path
-        d="M5 16 V8.5 L8.5 5 H15.2"
+        d="M 8,2 L 24,2 L 30,8 L 30,24 L 24,30 L 8,30 L 2,24 L 2,8 Z"
         stroke="currentColor"
         strokeWidth="1.5"
-        strokeLinecap="square"
         strokeLinejoin="miter"
-      />
-      <path
-        d="M16.8 5 H23.5 L27 8.5 V16"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="square"
-        strokeLinejoin="miter"
-      />
-      <path
-        d="M27 16 V23.5 L23.5 27 H16.8"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="square"
-        strokeLinejoin="miter"
-      />
-      <path
-        d="M15.2 27 H8.5 L5 23.5 V16"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="square"
-        strokeLinejoin="miter"
+        fill="none"
       />
 
-      {/* Metrology tick marks in the top/bottom gaps */}
+      {/* Metrology ticks — top / bottom center */}
       <path
-        d="M16 3.6 V5.4"
+        d="M 16,0 L 16,4"
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinecap="square"
       />
       <path
-        d="M16 26.6 V28.4"
+        d="M 16,28 L 16,32"
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinecap="square"
       />
 
-      {/* Monad diamond — outline only */}
+      {/* Monad diamond — center-symmetric outline */}
       <path
-        d="M16 10.25 L21.75 16 L16 21.75 L10.25 16 Z"
+        d="M 16,9 L 23,16 L 16,23 L 9,16 Z"
         stroke="currentColor"
         strokeWidth="1.25"
         strokeLinejoin="miter"
+        fill="none"
       />
 
       {/* Nucleus — neural focus anchor */}
-      <circle cx="16" cy="16" r="1" fill="currentColor" />
+      <circle cx="16" cy="16" r="1.25" fill="currentColor" />
     </svg>
   );
 }
