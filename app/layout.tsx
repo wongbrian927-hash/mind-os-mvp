@@ -13,11 +13,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Mind OS",
-  description: "5-5 諧振呼吸與專注反應測試 MVP",
+  title: "Mind OS · Neural Benchmark",
+  description: "Nordic Minimalist Bio-Quant Protocol & Cognitive Benchmark",
   icons: {
-    // public/favicon.svg — app/icon.svg is also auto-wired by the App Router
-    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+    ],
+    apple: "/favicon.svg",
   },
 };
 
