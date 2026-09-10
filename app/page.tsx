@@ -196,6 +196,9 @@ export default function Home() {
   const [stroopResults, setStroopResults] = useState<StroopResult[]>([]);
   const [reportAt, setReportAt] = useState<Date | null>(null);
   const [mockSessionId, setMockSessionId] = useState<string | null>(null);
+  const [mockApexVariant, setMockApexVariant] = useState<
+    import("@/lib/calculateTier").ApexVariant | null
+  >(null);
 
   const orbRef = useRef<HTMLDivElement>(null);
   const phaseRef = useRef<BreathPhase>("inhale");
@@ -572,6 +575,7 @@ export default function Home() {
     setBufferCount(BUFFER_SECONDS);
     setReportAt(null);
     setMockSessionId(null);
+    setMockApexVariant(null);
   };
 
   const injectMockTier = useCallback(
@@ -599,6 +603,7 @@ export default function Home() {
       setStroopResults(nextStroop);
       setCompletedBreathingBeforeTest(payload.completedBreathingBeforeTest);
       setMockSessionId(payload.sessionId);
+      setMockApexVariant(payload.apexVariant ?? null);
       setReportAt(new Date());
       setSessionStage("summary");
     },
@@ -919,6 +924,7 @@ export default function Home() {
               reportAt={reportAt}
               completedBreathingBeforeTest={completedBreathingBeforeTest}
               sessionIdOverride={mockSessionId ?? undefined}
+              apexVariantOverride={mockApexVariant ?? undefined}
             />
           ) : null}
         </section>

@@ -1,17 +1,20 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toBlob, toPng } from "html-to-image";
 import type { BenchmarkData } from "@/types/benchmark";
 import {
   getTierConfig,
   interferenceDisplay,
+  isTierZero,
+  pickRandomApexVariant,
+  type ApexVariant,
   type TierLevel,
 } from "@/lib/calculateTier";
 
 export type ResultCardLang = "zh" | "en";
 export type CardAspect = "story" | "square";
-export type { TierLevel };
+export type { TierLevel, ApexVariant };
 
 export type ResultCardProps = Pick<
   BenchmarkData,
@@ -21,6 +24,8 @@ export type ResultCardProps = Pick<
   onSaved?: () => void;
   /** Dev mock only — forces a fixed session id on the card. */
   sessionIdOverride?: string;
+  /** Dev / forced apex skin. When omitted, Tier 00 picks randomly once. */
+  apexVariantOverride?: ApexVariant;
 };
 
 const COPY = {
@@ -81,16 +86,35 @@ function buildSessionId(avgSrt: number, interference: number, acc: number, at: D
   return `MOS-${hex.slice(0, 4)}-${hex.slice(4)}`;
 }
 
-/** Monospace 5-scale diamond gauge: ◆ filled / ◇ hollow. */
-function DiamondGauge({ filled, color }: { filled: number; color: string }) {
-  const cells = Array.from({ length: 5 }, (_, index) => (index < filled ? "◆" : "◇"));
+/**
+ * Monospace 5-scale diamond gauge.
+ * Uses per-glyph solid colors (not bg-clip-text) so html-to-image stays reliable.
+ */
+function DiamondGauge({
+  filled,
+  color,
+  spectrumColors,
+}: {
+  filled: number;
+  color: string;
+  spectrumColors?: string[] | null;
+}) {
   return (
-    <span
-      aria-hidden
-      className="inline-flex font-mono text-[11px] tracking-[0.14em]"
-      style={{ color }}
-    >
-      {cells.join(" ")}
+    <span aria-hidden className="inline-flex font-mono text-[11px] tracking-[0.14em]">
+      {Array.from({ length: 5 }, (_, index) => {
+        const lit = index < filled;
+        const tone =
+          lit && spectrumColors && spectrumColors[index]
+            ? spectrumColors[index]
+            : lit
+              ? color
+              : "rgba(148,163,184,0.35)";
+        return (
+          <span key={index} style={{ color: tone }} className={index > 0 ? "ml-[0.14em]" : undefined}>
+            {lit ? "◆" : "◇"}
+          </span>
+        );
+      })}
     </span>
   );
 }
@@ -114,16 +138,18 @@ async function waitForFontsReady() {
 }
 
 /** Capture the on-screen card node as-is (WYSIWYG). */
-async function renderCardBlob(source: HTMLElement): Promise<Blob> {
+async function renderCardBlob(
+  source: HTMLElement,
+  backgroundColor: string,
+): Promise<Blob> {
   await waitForFontsReady();
 
   const options = {
     pixelRatio: 3,
     cacheBust: true,
-    backgroundColor: "#F8F9FA",
+    backgroundColor,
   };
 
-  // Warm Safari / html-to-image font cache without mutating layout.
   await toPng(source, options);
   await new Promise<void>((resolve) => window.setTimeout(resolve, 30));
 
@@ -144,7 +170,6 @@ async function saveExportBlob(blob: Blob, filename: string) {
       return;
     }
     const url = URL.createObjectURL(blob);
-    // iOS Safari often ignores <a download>; open blob so user can long-press save.
     const opened = window.open(url, "_blank");
     if (!opened) {
       const link = document.createElement("a");
@@ -167,8 +192,12 @@ async function saveExportBlob(blob: Blob, filename: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
-async function exportCardImage(source: HTMLElement, filename: string) {
-  const blob = await renderCardBlob(source);
+async function exportCardImage(
+  source: HTMLElement,
+  filename: string,
+  backgroundColor: string,
+) {
+  const blob = await renderCardBlob(source, backgroundColor);
   await saveExportBlob(blob, filename);
 }
 
@@ -181,11 +210,29 @@ export default function ResultCard({
   completedBreathingBeforeTest,
   onSaved,
   sessionIdOverride,
+  apexVariantOverride,
 }: ResultCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [aspect, setAspect] = useState<CardAspect>("story");
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+
+  const apexEligible = isTierZero({
+    latency: avgSrt,
+    interference,
+    accuracy: acc,
+    completedBreathingBeforeTest,
+  });
+
+  const [apexVariant, setApexVariant] = useState<ApexVariant>(
+    () => apexVariantOverride ?? pickRandomApexVariant(),
+  );
+
+  useEffect(() => {
+    if (apexVariantOverride) {
+      setApexVariant(apexVariantOverride);
+    }
+  }, [apexVariantOverride]);
 
   const t = COPY[lang];
   const tier = useMemo(
@@ -196,8 +243,9 @@ export default function ResultCard({
         accuracy: acc,
         lang,
         completedBreathingBeforeTest,
+        apexVariant: apexEligible ? apexVariant : undefined,
       }),
-    [acc, avgSrt, completedBreathingBeforeTest, interference, lang],
+    [acc, apexEligible, apexVariant, avgSrt, completedBreathingBeforeTest, interference, lang],
   );
   const protocolLabel =
     lang === "zh"
@@ -221,7 +269,7 @@ export default function ResultCard({
     setToast(null);
     try {
       const filename = `mind-os-${sessionId.toLowerCase()}.png`;
-      await exportCardImage(cardRef.current, filename);
+      await exportCardImage(cardRef.current, filename, tier.cardBackground);
       setToast(t.saved);
       onSaved?.();
     } catch {
@@ -230,7 +278,19 @@ export default function ResultCard({
       setBusy(false);
       window.setTimeout(() => setToast(null), 2600);
     }
-  }, [busy, lang, onSaved, sessionId, t.saved]);
+  }, [busy, lang, onSaved, sessionId, t.saved, tier.cardBackground]);
+
+  const isApex = tier.isApex;
+  const labelMuted = isApex ? "text-slate-400" : "text-zinc-400";
+  const labelSoft = isApex ? "text-slate-400" : "text-zinc-500";
+  const metricPrimary = isApex ? "text-slate-50" : "text-[#0F1115]";
+  const metricSub = isApex ? "text-slate-400" : "text-zinc-500";
+  const rule = isApex ? "border-zinc-800" : "border-zinc-800/10";
+  const titleTone = isApex ? "text-slate-100" : "text-zinc-800";
+  const statusMono = isApex ? "text-slate-300" : "text-zinc-700";
+  const diagnosisTone = isApex ? "text-slate-300" : "text-zinc-500";
+  const sessionTone = isApex ? "text-slate-400" : "text-zinc-600";
+  const watermarkTone = isApex ? "text-slate-500" : "text-zinc-500";
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col items-center gap-4">
@@ -259,260 +319,322 @@ export default function ResultCard({
         </button>
       </div>
 
-      <div
-        ref={cardRef}
-        className={`relative w-full overflow-hidden bg-[#F8F9FA] text-[#0F1115] ${
-          aspect === "story" ? "aspect-[9/16]" : "aspect-square"
-        }`}
-        style={{
-          fontFamily: "var(--font-geist-sans), Helvetica, Arial, sans-serif",
-          border: `1px solid ${tier.cardBorder}`,
-          boxShadow: tier.cardShadow,
-        }}
-      >
-        <div
-          data-card-shell
-          className="absolute inset-0 flex h-full flex-col justify-between px-7 py-8 sm:px-8 sm:py-9"
-        >
-          <header
-            data-card-block
-            className="flex items-start justify-between gap-4 border-b border-zinc-800/10 pb-4"
-          >
-            <div>
-              <p
-                data-export-label
-                className="font-mono text-[10px] tracking-[0.32em] text-zinc-500"
-              >
-                {t.brand}
-              </p>
-              <p
-                data-export-mono
-                className="mt-1 font-mono text-[9px] tracking-[0.28em] text-zinc-400"
-              >
-                {t.protocol}
-              </p>
-            </div>
-            <div className="text-right">
-              <p
-                data-export-mono
-                className="font-mono text-[9px] tracking-[0.16em] text-zinc-500"
-              >
-                {localStamp}
-              </p>
-              <p
-                data-export-mono
-                className="mt-1 font-mono text-[8px] tracking-[0.14em] text-zinc-400"
-              >
-                {utcStamp}
-              </p>
-              <p
-                data-export-mono
-                className="mt-2 font-mono text-[9px] tracking-[0.18em] text-zinc-600"
-              >
-                {sessionId}
-              </p>
-            </div>
-          </header>
-
-          <section data-card-block>
-            <div className="flex items-start justify-between gap-3">
-              <p
-                data-export-label
-                className="text-[8px] font-medium uppercase tracking-[0.28em] text-zinc-400"
-              >
-                {t.reaction}
-              </p>
-              <DiamondGauge filled={tier.diamondFilled} color={tier.accent} />
-            </div>
-            <p
-              data-export-latency
-              className={`mt-2 font-mono text-6xl font-medium tracking-tight text-[#0F1115] sm:text-7xl ${
-                tier.isApex ? "drop-shadow-[0_2px_8px_rgba(139,92,246,0.25)]" : ""
+      <div className="relative w-full">
+        {isApex ? (
+          <div className="absolute -top-1 right-0 z-10 flex gap-1">
+            <button
+              type="button"
+              onClick={() => setApexVariant("aurora")}
+              className={`rounded border px-1.5 py-0.5 font-mono text-[8px] tracking-[0.14em] transition ${
+                apexVariant === "aurora"
+                  ? "border-cyan-300/60 bg-cyan-400/15 text-cyan-200"
+                  : "border-white/15 bg-black/40 text-slate-400 hover:text-slate-200"
               }`}
-              style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
             >
-              {avgSrt}
-              <span
-                data-export-latency-unit
-                className="ml-2 align-baseline font-sans text-sm font-normal tracking-[0.18em] text-zinc-400"
-              >
-                ms
-              </span>
-            </p>
-            <div
-              data-export-bar
-              className="mt-5 h-[2px] w-full"
-              style={{ backgroundColor: tier.accentSoft }}
+              AURORA
+            </button>
+            <button
+              type="button"
+              onClick={() => setApexVariant("midnight-sun")}
+              className={`rounded border px-1.5 py-0.5 font-mono text-[8px] tracking-[0.14em] transition ${
+                apexVariant === "midnight-sun"
+                  ? "border-amber-300/60 bg-amber-400/15 text-amber-200"
+                  : "border-white/15 bg-black/40 text-slate-400 hover:text-slate-200"
+              }`}
             >
-              <div
-                className="h-full transition-[width] duration-500"
-                style={{
-                  width: `${Math.round(tier.progress * 100)}%`,
-                  backgroundColor: tier.accent,
-                }}
-              />
-            </div>
-            <div className="mt-4 flex items-center justify-between gap-3">
-              <p
-                data-export-label
-                className="text-[8px] uppercase tracking-[0.24em] text-zinc-400"
-              >
-                {t.tier}
-              </p>
-              <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
-                <span
-                  className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: tier.accent, boxShadow: tier.glow }}
-                />
-                <span
-                  data-export-title
-                  className="text-sm tracking-wide text-zinc-800"
-                >
-                  {tier.title}
-                </span>
-                <span
-                  data-export-pill
-                  className={`px-2 py-0.5 font-mono text-[9px] tracking-[0.12em] ${
-                    tier.isApex ? "rounded-sm border-2" : "rounded-full border"
-                  }`}
-                  style={{
-                    borderColor: tier.isApex ? tier.accent : `${tier.accent}55`,
-                    color: tier.accent,
-                    boxShadow: tier.isApex
-                      ? `inset 0 0 0 1px ${tier.accentSoft}`
-                      : undefined,
-                  }}
-                >
-                  {tier.percentLabel}
-                </span>
-              </div>
-            </div>
-            <p
-              data-export-mono
-              className="mt-2 font-mono text-[9px] tracking-[0.2em] text-zinc-400"
-            >
-              {tier.titleEn}
-            </p>
-          </section>
+              SOLAR
+            </button>
+          </div>
+        ) : null}
 
-          <section
-            data-card-block
-            className="grid grid-cols-2 gap-5 border-y border-zinc-800/10 py-5"
+        <div
+          ref={cardRef}
+          className={`relative w-full overflow-hidden ${
+            isApex ? "text-slate-50" : "bg-[#F8F9FA] text-[#0F1115]"
+          } ${aspect === "story" ? "aspect-[9/16]" : "aspect-square"}`}
+          style={{
+            fontFamily: "var(--font-geist-sans), Helvetica, Arial, sans-serif",
+            border: `1px solid ${tier.cardBorder}`,
+            boxShadow: tier.cardShadow,
+            backgroundColor: tier.cardBackground,
+          }}
+        >
+          {isApex && tier.radialGlow ? (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0"
+              style={{ backgroundImage: tier.radialGlow }}
+            />
+          ) : null}
+
+          <div
+            data-card-shell
+            className="absolute inset-0 z-[1] flex h-full flex-col justify-between px-7 py-8 sm:px-8 sm:py-9"
           >
-            <div>
+            <header
+              data-card-block
+              className={`flex items-start justify-between gap-4 border-b pb-4 ${rule}`}
+            >
+              <div>
+                <p
+                  data-export-label
+                  className={`font-mono text-[10px] tracking-[0.32em] ${labelSoft}`}
+                >
+                  {t.brand}
+                </p>
+                <p
+                  data-export-mono
+                  className={`mt-1 font-mono text-[9px] tracking-[0.28em] ${labelMuted}`}
+                >
+                  {t.protocol}
+                </p>
+              </div>
+              <div className="text-right">
+                <p
+                  data-export-mono
+                  className={`font-mono text-[9px] tracking-[0.16em] ${labelSoft}`}
+                >
+                  {localStamp}
+                </p>
+                <p
+                  data-export-mono
+                  className={`mt-1 font-mono text-[8px] tracking-[0.14em] ${labelMuted}`}
+                >
+                  {utcStamp}
+                </p>
+                <p
+                  data-export-mono
+                  className={`mt-2 font-mono text-[9px] tracking-[0.18em] ${sessionTone}`}
+                >
+                  {sessionId}
+                </p>
+              </div>
+            </header>
+
+            <section data-card-block>
+              <div className="flex items-start justify-between gap-3">
+                <p
+                  data-export-label
+                  className={`text-[8px] font-medium uppercase tracking-[0.28em] ${labelMuted}`}
+                >
+                  {t.reaction}
+                </p>
+                <DiamondGauge
+                  filled={tier.diamondFilled}
+                  color={tier.accent}
+                  spectrumColors={tier.diamondColors}
+                />
+              </div>
               <p
-                data-export-label
-                className="text-[8px] uppercase tracking-[0.22em] text-zinc-400"
+                data-export-latency
+                className={`mt-2 font-mono text-6xl font-medium tracking-tight sm:text-7xl ${metricPrimary}`}
+                style={{
+                  fontFamily: "var(--font-geist-mono), ui-monospace, monospace",
+                  filter: tier.latencyFilter ?? undefined,
+                }}
               >
-                {t.interference}
-              </p>
-              <p
-                data-export-metric
-                className="mt-2 font-mono text-3xl tracking-tight text-[#0F1115]"
-                style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
-              >
-                {lossDisplay}
-                <span className="ml-1 font-sans text-[10px] tracking-[0.16em] text-zinc-400">
+                {avgSrt}
+                <span
+                  data-export-latency-unit
+                  className={`ml-2 align-baseline font-sans text-sm font-normal tracking-[0.18em] ${labelMuted}`}
+                >
                   ms
                 </span>
               </p>
-              <p data-export-mono className="mt-2 text-[10px] leading-4 text-zinc-500">
-                {tier.interferenceLabel}
+              <div
+                data-export-bar
+                className="mt-5 h-[2px] w-full overflow-hidden"
+                style={{ backgroundColor: tier.accentSoft }}
+              >
+                <div
+                  className="h-full transition-[width] duration-500"
+                  style={{
+                    width: `${Math.round(tier.progress * 100)}%`,
+                    background: tier.spectrumGradient ?? tier.accent,
+                    backgroundColor: tier.accent,
+                  }}
+                />
+              </div>
+              <div className="mt-4 flex items-center justify-between gap-3">
+                <p
+                  data-export-label
+                  className={`text-[8px] uppercase tracking-[0.24em] ${labelMuted}`}
+                >
+                  {t.tier}
+                </p>
+                <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+                  <span
+                    className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+                    style={{
+                      background: tier.spectrumGradient ?? tier.accent,
+                      backgroundColor: tier.accent,
+                      boxShadow: tier.glow,
+                    }}
+                  />
+                  <span
+                    data-export-title
+                    className={`text-sm tracking-wide ${titleTone}`}
+                  >
+                    {tier.title}
+                  </span>
+                  <span
+                    data-export-pill
+                    className={`px-2 py-0.5 font-mono text-[9px] tracking-[0.12em] ${
+                      isApex ? "rounded-sm border-2" : "rounded-full border"
+                    }`}
+                    style={{
+                      borderColor: isApex ? tier.accent : `${tier.accent}55`,
+                      color: tier.accent,
+                      boxShadow: isApex
+                        ? `inset 0 0 0 1px ${tier.accentSoft}`
+                        : undefined,
+                    }}
+                  >
+                    {tier.percentLabel}
+                  </span>
+                </div>
+              </div>
+              <p
+                data-export-mono
+                className={`mt-2 font-mono text-[9px] tracking-[0.2em] ${labelMuted}`}
+              >
+                {tier.titleEn}
               </p>
-            </div>
-            <div>
+            </section>
+
+            <section
+              data-card-block
+              className={`grid grid-cols-2 gap-5 border-y py-5 ${rule}`}
+            >
+              <div>
+                <p
+                  data-export-label
+                  className={`text-[8px] uppercase tracking-[0.22em] ${labelMuted}`}
+                >
+                  {t.interference}
+                </p>
+                <p
+                  data-export-metric
+                  className={`mt-2 font-mono text-3xl tracking-tight ${metricPrimary}`}
+                  style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
+                >
+                  {lossDisplay}
+                  <span className={`ml-1 font-sans text-[10px] tracking-[0.16em] ${labelMuted}`}>
+                    ms
+                  </span>
+                </p>
+                <p data-export-mono className={`mt-2 text-[10px] leading-4 ${metricSub}`}>
+                  {tier.interferenceLabel}
+                </p>
+              </div>
+              <div>
+                <p
+                  data-export-label
+                  className={`text-[8px] uppercase tracking-[0.22em] ${labelMuted}`}
+                >
+                  {t.accuracy}
+                </p>
+                <p
+                  data-export-metric
+                  className={`mt-2 font-mono text-3xl tracking-tight ${metricPrimary}`}
+                  style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
+                >
+                  {acc}
+                  <span className={`ml-1 font-sans text-[10px] tracking-[0.16em] ${labelMuted}`}>
+                    %
+                  </span>
+                </p>
+                <p data-export-mono className={`mt-2 text-[10px] leading-4 ${metricSub}`}>
+                  ACC
+                </p>
+              </div>
+            </section>
+
+            <section data-card-block>
               <p
                 data-export-label
-                className="text-[8px] uppercase tracking-[0.22em] text-zinc-400"
+                className={`text-[8px] uppercase tracking-[0.22em] ${labelMuted}`}
               >
-                {t.accuracy}
+                {t.breath}
               </p>
-              <p
-                data-export-metric
-                className="mt-2 font-mono text-3xl tracking-tight text-[#0F1115]"
-                style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
-              >
-                {acc}
-                <span className="ml-1 font-sans text-[10px] tracking-[0.16em] text-zinc-400">
-                  %
-                </span>
-              </p>
-              <p data-export-mono className="mt-2 text-[10px] leading-4 text-zinc-500">
-                ACC
-              </p>
-            </div>
-          </section>
+              <div className="mt-3 flex items-end justify-between gap-3">
+                <p
+                  data-export-metric
+                  className="font-mono text-2xl tracking-tight"
+                  style={{
+                    fontFamily: "var(--font-geist-mono), ui-monospace, monospace",
+                    color: tier.accent,
+                    textShadow: isApex
+                      ? `0 0 14px ${tier.accentSoft}`
+                      : undefined,
+                  }}
+                >
+                  {tier.breathLabel}
+                </p>
+                <DiamondGauge
+                  filled={tier.diamondFilled}
+                  color={tier.accent}
+                  spectrumColors={tier.diamondColors}
+                />
+              </div>
+            </section>
 
-          <section data-card-block>
-            <p
-              data-export-label
-              className="text-[8px] uppercase tracking-[0.22em] text-zinc-400"
+            <section
+              data-card-block
+              className={
+                isApex
+                  ? "rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-3"
+                  : undefined
+              }
             >
-              {t.breath}
-            </p>
-            <div className="mt-3 flex items-end justify-between gap-3">
-              <p
-                data-export-metric
-                className="font-mono text-2xl tracking-tight"
-                style={{
-                  fontFamily: "var(--font-geist-mono), ui-monospace, monospace",
-                  color: tier.accent,
-                }}
-              >
-                {tier.breathLabel}
-              </p>
-              <DiamondGauge filled={tier.diamondFilled} color={tier.accent} />
-            </div>
-          </section>
-
-          <section data-card-block>
-            <p
-              data-export-label
-              className="text-[8px] uppercase tracking-[0.22em] text-zinc-400"
-            >
-              {t.status}
-            </p>
-            <div className="mt-3 space-y-2">
-              <p
-                data-export-mono
-                className="font-mono text-[11px] tracking-[0.08em] text-zinc-700"
-              >
-                {tier.statusPrimary}
-              </p>
-              <p
-                data-export-mono
-                className="font-mono text-[11px] tracking-[0.08em] text-zinc-700"
-              >
-                {tier.statusSecondary}
-              </p>
-              <p
-                data-export-mono
-                className="font-mono text-[11px] tracking-[0.08em] text-zinc-700"
-              >
-                {protocolLabel}
-              </p>
-            </div>
-            <p
-              data-export-body
-              className="mt-4 text-[12px] leading-5 text-zinc-500"
-            >
-              {tier.diagnosis}
-            </p>
-            <div className="mt-5 flex items-end justify-between border-t border-zinc-800/10 pt-4">
               <p
                 data-export-label
-                className="text-[8px] uppercase tracking-[0.22em] text-zinc-400"
+                className={`text-[8px] uppercase tracking-[0.22em] ${labelMuted}`}
               >
-                {t.watermark}
+                {t.status}
               </p>
+              <div className="mt-3 space-y-2">
+                <p
+                  data-export-mono
+                  className={`font-mono text-[11px] tracking-[0.08em] ${statusMono}`}
+                >
+                  {tier.statusPrimary}
+                </p>
+                <p
+                  data-export-mono
+                  className={`font-mono text-[11px] tracking-[0.08em] ${statusMono}`}
+                >
+                  {tier.statusSecondary}
+                </p>
+                <p
+                  data-export-mono
+                  className={`font-mono text-[11px] tracking-[0.08em] ${statusMono}`}
+                >
+                  {protocolLabel}
+                </p>
+              </div>
               <p
-                data-export-mono
-                className="font-mono text-[9px] tracking-[0.16em] text-zinc-500"
+                data-export-body
+                className={`mt-4 text-[12px] leading-5 ${diagnosisTone}`}
               >
-                {sessionId}
+                {tier.diagnosis}
               </p>
-            </div>
-          </section>
+              <div className={`mt-5 flex items-end justify-between border-t pt-4 ${rule}`}>
+                <p
+                  data-export-label
+                  className={`text-[8px] uppercase tracking-[0.22em] ${labelMuted}`}
+                >
+                  {t.watermark}
+                </p>
+                <p
+                  data-export-mono
+                  className={`font-mono text-[9px] tracking-[0.16em] ${watermarkTone}`}
+                >
+                  {sessionId}
+                </p>
+              </div>
+            </section>
+          </div>
         </div>
       </div>
 
