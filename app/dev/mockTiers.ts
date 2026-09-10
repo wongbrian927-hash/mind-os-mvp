@@ -33,10 +33,10 @@ const TIER0_BASE = {
 export const MOCK_TIERS: Record<MockTierKey, MockTierPayload> = {
   tier0: {
     key: "tier0",
-    label: "Tier 0 · Aurora",
+    label: "Tier 0 · Random Apex",
     ...TIER0_BASE,
     sessionId: "MOS-DEV-T000",
-    apexVariant: "aurora",
+    // apexVariant omitted → inject picks 50/50
   },
   "tier0-aurora": {
     key: "tier0-aurora",

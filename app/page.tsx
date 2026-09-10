@@ -9,6 +9,11 @@ import {
   parseMockTierKey,
   type MockTierKey,
 } from "@/app/dev/mockTiers";
+import {
+  isTierZero,
+  pickRandomApexVariant,
+  type ApexVariant,
+} from "@/lib/calculateTier";
 
 const IS_DEV = process.env.NODE_ENV === "development";
 
@@ -196,9 +201,8 @@ export default function Home() {
   const [stroopResults, setStroopResults] = useState<StroopResult[]>([]);
   const [reportAt, setReportAt] = useState<Date | null>(null);
   const [mockSessionId, setMockSessionId] = useState<string | null>(null);
-  const [mockApexVariant, setMockApexVariant] = useState<
-    import("@/lib/calculateTier").ApexVariant | null
-  >(null);
+  /** Locked at result generation — never re-roll on re-render / save / share. */
+  const [apexVariant, setApexVariant] = useState<ApexVariant | null>(null);
 
   const orbRef = useRef<HTMLDivElement>(null);
   const phaseRef = useRef<BreathPhase>("inhale");
@@ -225,6 +229,9 @@ export default function Home() {
   const handleReactionRef = useRef<() => void>(() => {});
   const handleStroopKeyRef = useRef<(color: InkColor) => void>(() => {});
   const advanceBreathRef = useRef<() => void>(() => {});
+
+  const completedBreathingBeforeTestRef = useRef(false);
+  completedBreathingBeforeTestRef.current = completedBreathingBeforeTest;
 
   const clearTimer = (ref: { current: number | null }) => {
     if (ref.current !== null) {
@@ -456,7 +463,26 @@ export default function Home() {
 
       const nextIndex = stroopIndexRef.current + 1;
       if (nextIndex >= STROOP_COUNT) {
+        const avgLatency = Math.round(mean(latenciesRef.current));
+        const congruent = nextResults.filter((item) => item.congruent).map((item) => item.latencyMs);
+        const incongruent = nextResults
+          .filter((item) => !item.congruent)
+          .map((item) => item.latencyMs);
+        const interferenceMs = Math.round(mean(incongruent) - mean(congruent));
+        const accuracyPct = Math.round(
+          (nextResults.filter((item) => item.correct).length / STROOP_COUNT) * 100,
+        );
+        const lockedVariant = isTierZero({
+          latency: avgLatency,
+          interference: interferenceMs,
+          accuracy: accuracyPct,
+          completedBreathingBeforeTest: completedBreathingBeforeTestRef.current,
+        })
+          ? pickRandomApexVariant()
+          : null;
+
         sessionStageRef.current = "summary";
+        setApexVariant(lockedVariant);
         setReportAt(new Date());
         setSessionStage("summary");
         return;
@@ -575,7 +601,7 @@ export default function Home() {
     setBufferCount(BUFFER_SECONDS);
     setReportAt(null);
     setMockSessionId(null);
-    setMockApexVariant(null);
+    setApexVariant(null);
   };
 
   const injectMockTier = useCallback(
@@ -598,12 +624,17 @@ export default function Home() {
       reactionPhaseRef.current = "ready";
       stroopPhaseRef.current = "intro";
 
+      // Lock apex skin once at inject: explicit mock override, or 50/50 for bare tier0.
+      const lockedVariant =
+        payload.apexVariant ??
+        (key === "tier0" ? pickRandomApexVariant() : null);
+
       setLatencies(nextLatencies);
       setLastLatency(nextLatencies[nextLatencies.length - 1] ?? null);
       setStroopResults(nextStroop);
       setCompletedBreathingBeforeTest(payload.completedBreathingBeforeTest);
       setMockSessionId(payload.sessionId);
-      setMockApexVariant(payload.apexVariant ?? null);
+      setApexVariant(lockedVariant);
       setReportAt(new Date());
       setSessionStage("summary");
     },
@@ -923,8 +954,8 @@ export default function Home() {
               acc={acc}
               reportAt={reportAt}
               completedBreathingBeforeTest={completedBreathingBeforeTest}
+              apexVariant={apexVariant}
               sessionIdOverride={mockSessionId ?? undefined}
-              apexVariantOverride={mockApexVariant ?? undefined}
             />
           ) : null}
         </section>

@@ -1,13 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { toBlob, toPng } from "html-to-image";
 import type { BenchmarkData } from "@/types/benchmark";
 import {
   getTierConfig,
   interferenceDisplay,
-  isTierZero,
-  pickRandomApexVariant,
   type ApexVariant,
   type TierLevel,
 } from "@/lib/calculateTier";
@@ -18,14 +16,17 @@ export type { TierLevel, ApexVariant };
 
 export type ResultCardProps = Pick<
   BenchmarkData,
-  "avgSrt" | "interference" | "acc" | "reportAt" | "completedBreathingBeforeTest"
+  | "avgSrt"
+  | "interference"
+  | "acc"
+  | "reportAt"
+  | "completedBreathingBeforeTest"
+  | "apexVariant"
 > & {
   lang: ResultCardLang;
   onSaved?: () => void;
   /** Dev mock only — forces a fixed session id on the card. */
   sessionIdOverride?: string;
-  /** Dev / forced apex skin. When omitted, Tier 00 picks randomly once. */
-  apexVariantOverride?: ApexVariant;
 };
 
 const COPY = {
@@ -208,31 +209,14 @@ export default function ResultCard({
   acc,
   reportAt,
   completedBreathingBeforeTest,
+  apexVariant,
   onSaved,
   sessionIdOverride,
-  apexVariantOverride,
 }: ResultCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [aspect, setAspect] = useState<CardAspect>("story");
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-
-  const apexEligible = isTierZero({
-    latency: avgSrt,
-    interference,
-    accuracy: acc,
-    completedBreathingBeforeTest,
-  });
-
-  const [apexVariant, setApexVariant] = useState<ApexVariant>(
-    () => apexVariantOverride ?? pickRandomApexVariant(),
-  );
-
-  useEffect(() => {
-    if (apexVariantOverride) {
-      setApexVariant(apexVariantOverride);
-    }
-  }, [apexVariantOverride]);
 
   const t = COPY[lang];
   const tier = useMemo(
@@ -243,9 +227,9 @@ export default function ResultCard({
         accuracy: acc,
         lang,
         completedBreathingBeforeTest,
-        apexVariant: apexEligible ? apexVariant : undefined,
+        apexVariant: apexVariant ?? undefined,
       }),
-    [acc, apexEligible, apexVariant, avgSrt, completedBreathingBeforeTest, interference, lang],
+    [acc, apexVariant, avgSrt, completedBreathingBeforeTest, interference, lang],
   );
   const protocolLabel =
     lang === "zh"
@@ -320,33 +304,6 @@ export default function ResultCard({
       </div>
 
       <div className="relative w-full">
-        {isApex ? (
-          <div className="absolute -top-1 right-0 z-10 flex gap-1">
-            <button
-              type="button"
-              onClick={() => setApexVariant("aurora")}
-              className={`rounded border px-1.5 py-0.5 font-mono text-[8px] tracking-[0.14em] transition ${
-                apexVariant === "aurora"
-                  ? "border-cyan-300/60 bg-cyan-400/15 text-cyan-200"
-                  : "border-white/15 bg-black/40 text-slate-400 hover:text-slate-200"
-              }`}
-            >
-              AURORA
-            </button>
-            <button
-              type="button"
-              onClick={() => setApexVariant("midnight-sun")}
-              className={`rounded border px-1.5 py-0.5 font-mono text-[8px] tracking-[0.14em] transition ${
-                apexVariant === "midnight-sun"
-                  ? "border-amber-300/60 bg-amber-400/15 text-amber-200"
-                  : "border-white/15 bg-black/40 text-slate-400 hover:text-slate-200"
-              }`}
-            >
-              SOLAR
-            </button>
-          </div>
-        ) : null}
-
         <div
           ref={cardRef}
           className={`relative w-full overflow-hidden ${
