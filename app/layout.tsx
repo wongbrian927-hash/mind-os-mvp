@@ -16,20 +16,22 @@ export const metadata: Metadata = {
   title: "Mind OS · Neural Benchmark",
   description: "Nordic Minimalist Bio-Quant Protocol & Cognitive Benchmark",
   icons: {
-      icon: [
-        { url: "/favicon.svg?v=2", type: "image/svg+xml" },
-        { url: "/icon.svg?v=2", type: "image/svg+xml" },
-      ],
-      apple: "/favicon.svg?v=2",
-    },
+    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
+    apple: "/favicon.svg",
+  },
+};
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
     <html
       lang="zh-Hant"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="flex min-h-full flex-col">{children}</body>
     </html>
   );
 }
