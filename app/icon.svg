@@ -4,7 +4,11 @@
   fill="none"
   shape-rendering="geometricPrecision"
 >
-  <!-- The Quant Monad  App Router favicon (app/icon.svg) -->
+  <!--
+    The Quant Monad favicon
+    Same 32×32 geometry as Logo.tsx; slightly heavier strokes so 16×16
+    browser tabs stay legible without blurry hairlines.
+  -->
   <path
     d="M 8,2 L 24,2 L 30,8 L 30,24 L 24,30 L 8,30 L 2,24 L 2,8 Z"
     stroke="#CBD5E1"

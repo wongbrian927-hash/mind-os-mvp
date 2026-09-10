@@ -16,12 +16,12 @@ export const metadata: Metadata = {
   title: "Mind OS · Neural Benchmark",
   description: "Nordic Minimalist Bio-Quant Protocol & Cognitive Benchmark",
   icons: {
-    icon: [
-      { url: "/favicon.svg", type: "image/svg+xml" },
-    ],
-    apple: "/favicon.svg",
-  },
-};
+      icon: [
+        { url: "/favicon.svg?v=2", type: "image/svg+xml" },
+        { url: "/icon.svg?v=2", type: "image/svg+xml" },
+      ],
+      apple: "/favicon.svg?v=2",
+    },
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
