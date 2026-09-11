@@ -16,8 +16,14 @@ export const metadata: Metadata = {
   title: "Mind OS · Neural Benchmark",
   description: "Nordic Minimalist Bio-Quant Protocol & Cognitive Benchmark",
   icons: {
-    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
-    apple: "/favicon.svg",
+    icon: [
+      {
+        url: "/favicon.svg?v=3",
+        type: "image/svg+xml",
+      },
+    ],
+    shortcut: "/favicon.svg?v=3",
+    apple: "/favicon.svg?v=3",
   },
 };
 
