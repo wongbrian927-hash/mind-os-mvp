@@ -992,7 +992,7 @@ export default function Home() {
 
       <p
         aria-label="Disclaimer"
-        className="pointer-events-none absolute inset-x-0 bottom-0 z-[5] px-4 pb-4 text-center font-mono text-[9px] leading-relaxed tracking-wide text-zinc-600 sm:pb-6 sm:text-[10px]"
+        className="absolute inset-x-0 bottom-0 z-[5] mx-auto max-w-3xl px-4 pb-4 text-center font-mono text-[9px] leading-relaxed tracking-widest text-white/20 transition-opacity duration-300 hover:text-white/50 sm:pb-6 sm:text-[10px]"
       >
         {t.disclaimer}
       </p>

@@ -286,8 +286,8 @@ export function getTierConfig(data: TierInput): TierConfig {
       statusPrimary: "Trapezius: Elevated",
       statusSecondary: "Focus Index: Baseline",
       diagnosis: isZh
-        ? "反應通道尚可，但文字意義干擾上升，抑制控制負載偏高。"
-        : "Response channels remain intact, but semantic interference elevates inhibitory load.",
+        ? "反應通道尚可，但大腦緩存（Cache）即將爆滿，文字意義干擾已開始擊穿前額葉防線。"
+        : "Response channels remain intact, but cortical cache is near saturation — semantic interference is beginning to breach prefrontal defenses.",
       interferenceLabel: isZh ? "中度干擾" : "Moderate Load",
       breathLabel: "DRIFT",
       isApex: false,
@@ -300,10 +300,10 @@ export function getTierConfig(data: TierInput): TierConfig {
     diamondFilled,
     accent: "#E11D48",
     accentSoft: "rgba(225,29,72,0.18)",
-    glow: "0 0 10px rgba(225,29,72,0.45)",
-    cardShadow: "none",
-    cardBorder: "rgba(24, 24, 27, 0.1)",
-    cardBackground: "#F8F9FA",
+    glow: "0 0 12px rgba(220,38,38,0.55)",
+    cardShadow: "0 0 25px rgba(220, 38, 38, 0.25)",
+    cardBorder: "rgba(127, 29, 29, 0.8)",
+    cardBackground: "#09090b",
     progress: 0.22,
     title: isZh ? "神經疲勞" : "Neural Fatigue",
     titleEn: "TIER 04",
@@ -311,8 +311,8 @@ export function getTierConfig(data: TierInput): TierConfig {
     statusPrimary: "Trapezius: Guarded",
     statusSecondary: "Focus Index: Recharge",
     diagnosis: isZh
-      ? "大腦處於疲勞狀態，建議再做一次 5-5 諧振呼吸深層重置。"
-      : "The system is fatigued. Another 5-5 coherence round is indicated for deep reset.",
+      ? "前額葉抑制系統疑似離線，神經傳導出現嚴重丟包（Packet Loss）。認知頻寬已見底，建議立即物理切斷工作環境並避免任何重大決策。"
+      : "Prefrontal inhibition appears offline — severe neural packet loss detected. Cognitive bandwidth is exhausted. Physically disconnect from the work environment and avoid any major decisions.",
     interferenceLabel:
       interference > 220
         ? isZh

@@ -266,17 +266,19 @@ export default function ResultCard({
   }, [busy, lang, onSaved, sessionId, t.saved, tier.cardBackground]);
 
   const isApex = tier.isApex;
+  const isCritical = tier.level === 4;
+  const isDarkCard = isApex || isCritical;
   const isSquare = aspect === "square";
-  const labelMuted = isApex ? "text-slate-400" : "text-zinc-400";
-  const labelSoft = isApex ? "text-slate-400" : "text-zinc-500";
-  const metricPrimary = isApex ? "text-slate-50" : "text-[#0F1115]";
-  const metricSub = isApex ? "text-slate-400" : "text-zinc-500";
-  const rule = isApex ? "border-zinc-800" : "border-zinc-800/10";
-  const titleTone = isApex ? "text-slate-100" : "text-zinc-800";
-  const statusMono = isApex ? "text-slate-300" : "text-zinc-700";
-  const diagnosisTone = isApex ? "text-slate-300" : "text-zinc-500";
-  const sessionTone = isApex ? "text-slate-400" : "text-zinc-600";
-  const watermarkTone = isApex ? "text-slate-500" : "text-zinc-500";
+  const labelMuted = isDarkCard ? "text-slate-400" : "text-zinc-400";
+  const labelSoft = isDarkCard ? "text-slate-400" : "text-zinc-500";
+  const metricPrimary = isDarkCard ? "text-zinc-100" : "text-[#0F1115]";
+  const metricSub = isDarkCard ? "text-slate-400" : "text-zinc-500";
+  const rule = isDarkCard ? "border-zinc-800" : "border-zinc-800/10";
+  const titleTone = isDarkCard ? "text-zinc-100" : "text-zinc-800";
+  const statusMono = isDarkCard ? "text-slate-300" : "text-zinc-700";
+  const diagnosisTone = isDarkCard ? "text-slate-300" : "text-zinc-500";
+  const sessionTone = isDarkCard ? "text-slate-400" : "text-zinc-600";
+  const watermarkTone = isDarkCard ? "text-slate-500" : "text-zinc-500";
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col items-center gap-4">
@@ -309,12 +311,16 @@ export default function ResultCard({
         <div
           ref={cardRef}
           className={`relative w-full overflow-hidden ${
-            isApex ? "text-slate-50" : "bg-[#F8F9FA] text-[#0F1115]"
+            isCritical
+              ? "animate-pulse border border-red-900/80 bg-zinc-950 text-zinc-100 shadow-[0_0_25px_rgba(220,38,38,0.25)]"
+              : isApex
+                ? "text-slate-50"
+                : "bg-[#F8F9FA] text-[#0F1115]"
           } ${isSquare ? "aspect-square" : "aspect-[9/16]"}`}
           style={{
             fontFamily: "var(--font-geist-sans), Helvetica, Arial, sans-serif",
-            border: `1px solid ${tier.cardBorder}`,
-            boxShadow: tier.cardShadow,
+            border: isCritical ? undefined : `1px solid ${tier.cardBorder}`,
+            boxShadow: isCritical ? undefined : tier.cardShadow,
             backgroundColor: tier.cardBackground,
           }}
         >
@@ -588,10 +594,12 @@ export default function ResultCard({
             <section
               data-card-block
               className={`min-h-0 shrink ${
-                isApex
-                  ? `rounded-lg border border-zinc-800 bg-zinc-900/60 ${
-                      isSquare ? "px-2.5 py-2" : "px-3 py-3"
-                    }`
+                isApex || isCritical
+                  ? `rounded-lg border ${
+                      isCritical
+                        ? "border-red-900/50 bg-zinc-900/80"
+                        : "border-zinc-800 bg-zinc-900/60"
+                    } ${isSquare ? "px-2.5 py-2" : "px-3 py-3"}`
                   : ""
               }`}
             >
