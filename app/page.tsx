@@ -84,6 +84,8 @@ const COPY = {
     word: { red: "紅", blue: "藍" } as Record<InkColor, string>,
     submit: "📋 填寫 30 秒體驗感受（跳轉問卷）",
     again: "再測一次",
+    disclaimer:
+      "DISCLAIMER: MIND OS 提供之神經延遲及認知數據僅供個人量化追蹤參考，不構成任何臨床醫療診斷效力。若有持續性神經疲勞，請尋求專業醫療協助。",
   },
   en: {
     subtitle: "Breathe · Focus · React",
@@ -111,6 +113,8 @@ const COPY = {
     word: { red: "RED", blue: "BLUE" } as Record<InkColor, string>,
     submit: "📋 30-sec reflection (opens survey)",
     again: "Retry",
+    disclaimer:
+      "DISCLAIMER: Neural latency and cognitive load metrics provided by MIND OS are strictly for bio-quant tracking purposes and do not constitute clinical diagnosis. Seek medical assistance for chronic neural fatigue.",
   },
 } as const;
 
@@ -985,6 +989,13 @@ export default function Home() {
       </main>
 
       {IS_DEV ? <DevTierMockPanel onInject={injectMockTier} /> : null}
+
+      <p
+        aria-label="Disclaimer"
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-[5] px-4 pb-4 text-center font-mono text-[9px] leading-relaxed tracking-wide text-zinc-600 sm:pb-6 sm:text-[10px]"
+      >
+        {t.disclaimer}
+      </p>
     </div>
   );
 }
