@@ -45,8 +45,6 @@ const STROOP_BUFFER_SECONDS = 3;
 const MIN_SCALE = 1;
 const MAX_SCALE = 1.5;
 const PHASE_DURATION_MS = 5000;
-const TALLY_FORM_URL = "https://tally.so/r/0QWeRA";
-
 const PHASE_MS: Record<BreathPhase, number> = {
   inhale: PHASE_DURATION_MS,
   exhale: PHASE_DURATION_MS,
@@ -82,7 +80,6 @@ const COPY = {
     btnRed: "🔴 紅色 (Red)",
     btnBlue: "🔵 藍色 (Blue)",
     word: { red: "紅", blue: "藍" } as Record<InkColor, string>,
-    submit: "📋 填寫 30 秒體驗感受（跳轉問卷）",
     again: "再測一次",
     disclaimer:
       "DISCLAIMER: MIND OS 提供之神經延遲及認知數據僅供個人量化追蹤參考，不構成任何臨床醫療診斷效力。若有持續性神經疲勞，請尋求專業醫療協助。",
@@ -111,7 +108,6 @@ const COPY = {
     btnRed: "🔴 Red",
     btnBlue: "🔵 Blue",
     word: { red: "RED", blue: "BLUE" } as Record<InkColor, string>,
-    submit: "📋 30-sec reflection (opens survey)",
     again: "Retry",
     disclaimer:
       "DISCLAIMER: Neural latency and cognitive load metrics provided by MIND OS are strictly for bio-quant tracking purposes and do not constitute clinical diagnosis. Seek medical assistance for chronic neural fatigue.",
@@ -670,11 +666,6 @@ export default function Home() {
           (stroopResults.filter((item) => item.correct).length / STROOP_COUNT) * 100,
         )
       : null;
-  const tallyHref =
-    avgSrt !== null && rawInterference !== null && acc !== null
-      ? `${TALLY_FORM_URL}?avg_srt=${avgSrt}&interference=${rawInterference}&acc=${acc}&lang=${lang}&calibrated=${completedBreathingBeforeTest ? 1 : 0}`
-      : TALLY_FORM_URL;
-
   const currentStroop = stroopTrials[stroopIndex];
   const breathVisibleOnMobile =
     sessionStage === "srt" && reactionPhase === "ready";
@@ -718,8 +709,10 @@ export default function Home() {
       </header>
 
       <main
-        className={`relative z-10 mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-4 px-4 pb-6 pt-16 sm:gap-8 sm:px-10 sm:py-10 ${
-          sessionStage === "summary" ? "overflow-y-auto" : "overflow-hidden"
+        className={`relative z-10 mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-4 px-4 pt-16 sm:gap-8 sm:px-10 sm:pt-10 ${
+          sessionStage === "summary"
+            ? "overflow-y-auto pb-24 sm:pb-28"
+            : "overflow-hidden pb-6 sm:pb-10"
         }`}
       >
         <section
@@ -968,19 +961,11 @@ export default function Home() {
           ) : null}
         </section>
         {sessionStage === "summary" ? (
-          <div className="mx-auto flex w-full max-w-md flex-col gap-2">
-            <a
-              href={tallyHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex min-h-12 items-center justify-center rounded-full border border-white/15 bg-transparent px-5 text-sm tracking-wide text-slate-200 transition hover:bg-white/5"
-            >
-              {t.submit}
-            </a>
+          <div className="mx-auto mb-12 flex w-full max-w-md flex-col gap-2">
             <button
               type="button"
               onClick={retrySession}
-              className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 bg-transparent px-5 text-xs tracking-[0.28em] text-slate-500 transition hover:bg-white/5"
+              className="w-full rounded-full border border-zinc-700 bg-zinc-800/80 py-3.5 text-sm tracking-wide text-zinc-200 backdrop-blur-sm transition-colors hover:bg-zinc-700"
             >
               {t.again}
             </button>

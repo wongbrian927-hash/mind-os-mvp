@@ -12,7 +12,7 @@ import {
 import Logo from "@/app/components/Logo";
 
 export type ResultCardLang = "zh" | "en";
-export type CardAspect = "story" | "square";
+export type CardViewMode = "detailed" | "minimal";
 export type { TierLevel, ApexVariant };
 
 export type ResultCardProps = Pick<
@@ -37,8 +37,8 @@ const COPY = {
     save: "儲存數據卡片（Save Image）",
     saving: "產生中…",
     saved: "已儲存",
-    story: "9:16",
-    square: "1:1",
+    detailed: "詳細",
+    minimal: "簡約",
     reaction: "REACTION LATENCY",
     tier: "FOCUS TIER",
     interference: "INTERFERENCE LOSS",
@@ -53,8 +53,8 @@ const COPY = {
     save: "Save Image",
     saving: "Rendering…",
     saved: "Saved",
-    story: "9:16",
-    square: "1:1",
+    detailed: "Clinical",
+    minimal: "Minimal",
     reaction: "REACTION LATENCY",
     tier: "FOCUS TIER",
     interference: "INTERFERENCE LOSS",
@@ -215,8 +215,8 @@ export default function ResultCard({
   sessionIdOverride,
 }: ResultCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
-  const [aspect, setAspect] = useState<CardAspect>("story");
-  const [busy, setBusy] = useState(false);
+  const [viewMode, setViewMode] = useState<CardViewMode>("detailed");
+  const [isExporting, setIsExporting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const t = COPY[lang];
@@ -249,10 +249,13 @@ export default function ResultCard({
   const lossDisplay = interferenceDisplay(interference);
 
   const handleSave = useCallback(async () => {
-    if (!cardRef.current || busy) return;
-    setBusy(true);
+    if (!cardRef.current || isExporting) return;
+    setIsExporting(true);
     setToast(null);
     try {
+      // Let React commit: drop animate-pulse before capture (Tier 04 frame-timing).
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 50));
+      if (!cardRef.current) return;
       const filename = `mind-os-${sessionId.toLowerCase()}.png`;
       await exportCardImage(cardRef.current, filename, tier.cardBackground);
       setToast(t.saved);
@@ -260,15 +263,15 @@ export default function ResultCard({
     } catch {
       setToast(lang === "zh" ? "匯出失敗，請再試一次" : "Export failed. Try again.");
     } finally {
-      setBusy(false);
+      setIsExporting(false);
       window.setTimeout(() => setToast(null), 2600);
     }
-  }, [busy, lang, onSaved, sessionId, t.saved, tier.cardBackground]);
+  }, [isExporting, lang, onSaved, sessionId, t.saved, tier.cardBackground]);
 
   const isApex = tier.isApex;
   const isCritical = tier.level === 4;
   const isDarkCard = isApex || isCritical;
-  const isSquare = aspect === "square";
+  const isMinimal = viewMode === "minimal";
   const labelMuted = isDarkCard ? "text-slate-400" : "text-zinc-400";
   const labelSoft = isDarkCard ? "text-slate-400" : "text-zinc-500";
   const metricPrimary = isDarkCard ? "text-zinc-100" : "text-[#0F1115]";
@@ -282,46 +285,54 @@ export default function ResultCard({
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col items-center gap-4">
-      <div className="flex items-center gap-2 self-end">
+      <div
+        className={`flex items-center gap-2 self-end ${
+          isExporting ? "invisible pointer-events-none" : ""
+        }`}
+      >
         <button
           type="button"
-          onClick={() => setAspect("story")}
+          onClick={() => setViewMode("detailed")}
+          disabled={isExporting}
           className={`rounded-full border px-3 py-1 font-mono text-[10px] tracking-[0.18em] transition ${
-            aspect === "story"
+            viewMode === "detailed"
               ? "border-zinc-300 bg-zinc-100 text-zinc-900"
               : "border-white/15 text-slate-400"
           }`}
         >
-          {t.story}
+          {t.detailed}
         </button>
         <button
           type="button"
-          onClick={() => setAspect("square")}
+          onClick={() => setViewMode("minimal")}
+          disabled={isExporting}
           className={`rounded-full border px-3 py-1 font-mono text-[10px] tracking-[0.18em] transition ${
-            aspect === "square"
+            viewMode === "minimal"
               ? "border-zinc-300 bg-zinc-100 text-zinc-900"
               : "border-white/15 text-slate-400"
           }`}
         >
-          {t.square}
+          {t.minimal}
         </button>
       </div>
 
       <div className="relative w-full">
         <div
           ref={cardRef}
-          className={`relative w-full overflow-hidden ${
+          className={`relative aspect-[9/16] w-full overflow-hidden ${
             isCritical
-              ? "animate-pulse border border-red-900/80 bg-zinc-950 text-zinc-100 shadow-[0_0_25px_rgba(220,38,38,0.25)]"
+              ? `${isExporting ? "" : "animate-pulse"} border border-red-900/80 bg-zinc-950 text-zinc-100 shadow-[0_0_25px_rgba(220,38,38,0.25)]`
               : isApex
                 ? "text-slate-50"
                 : "bg-[#F8F9FA] text-[#0F1115]"
-          } ${isSquare ? "aspect-square" : "aspect-[9/16]"}`}
+          }`}
           style={{
             fontFamily: "var(--font-geist-sans), Helvetica, Arial, sans-serif",
             border: isCritical ? undefined : `1px solid ${tier.cardBorder}`,
             boxShadow: isCritical ? undefined : tier.cardShadow,
             backgroundColor: tier.cardBackground,
+            // Force full opacity while exporting so pulse mid-frame never leaks into PNG.
+            opacity: isCritical && isExporting ? 1 : undefined,
           }}
         >
           {isApex && tier.radialGlow ? (
@@ -334,21 +345,21 @@ export default function ResultCard({
 
           <div
             data-card-shell
-            className={`absolute inset-0 z-[1] flex h-full min-h-0 flex-col ${
-              isSquare
-                ? "justify-start gap-2 px-4 py-3 sm:px-5 sm:py-4"
-                : "justify-between px-7 py-8 sm:px-8 sm:py-9"
+            className={`absolute inset-0 z-[1] flex h-full min-h-0 flex-col justify-between ${
+              isMinimal
+                ? "gap-6 px-8 py-10 sm:gap-8 sm:px-9 sm:py-12"
+                : "px-7 py-8 sm:px-8 sm:py-9"
             }`}
           >
             <header
               data-card-block
-              className={`flex shrink-0 items-start justify-between gap-3 border-b ${rule} ${
-                isSquare ? "pb-2" : "gap-4 pb-4"
+              className={`flex shrink-0 items-start justify-between gap-4 border-b ${rule} ${
+                isMinimal ? "pb-5" : "pb-4"
               }`}
             >
               <div>
                 <div className={`flex items-center gap-2 ${labelSoft}`}>
-                  <Logo size={isSquare ? 14 : 16} className="shrink-0" />
+                  <Logo size={16} className="shrink-0" />
                   <p
                     data-export-label
                     className="font-mono text-[10px] tracking-[0.32em]"
@@ -356,32 +367,36 @@ export default function ResultCard({
                     {t.brand}
                   </p>
                 </div>
-                <p
-                  data-export-mono
-                  className={`mt-1 font-mono text-[9px] tracking-[0.28em] ${labelMuted}`}
-                >
-                  {t.protocol}
-                </p>
-              </div>
-              <div className="text-right">
-                <p
-                  data-export-mono
-                  className={`font-mono text-[9px] tracking-[0.16em] ${labelSoft}`}
-                >
-                  {localStamp}
-                </p>
-                {!isSquare ? (
+                {!isMinimal ? (
                   <p
                     data-export-mono
-                    className={`mt-1 font-mono text-[8px] tracking-[0.14em] ${labelMuted}`}
+                    className={`mt-1 font-mono text-[9px] tracking-[0.28em] ${labelMuted}`}
                   >
-                    {utcStamp}
+                    {t.protocol}
                   </p>
+                ) : null}
+              </div>
+              <div className="text-right">
+                {!isMinimal ? (
+                  <>
+                    <p
+                      data-export-mono
+                      className={`font-mono text-[9px] tracking-[0.16em] ${labelSoft}`}
+                    >
+                      {localStamp}
+                    </p>
+                    <p
+                      data-export-mono
+                      className={`mt-1 font-mono text-[8px] tracking-[0.14em] ${labelMuted}`}
+                    >
+                      {utcStamp}
+                    </p>
+                  </>
                 ) : null}
                 <p
                   data-export-mono
                   className={`font-mono text-[9px] tracking-[0.18em] ${sessionTone} ${
-                    isSquare ? "mt-1" : "mt-2"
+                    isMinimal ? "" : "mt-2"
                   }`}
                 >
                   {sessionId}
@@ -389,7 +404,10 @@ export default function ResultCard({
               </div>
             </header>
 
-            <section data-card-block className="shrink-0">
+            <section
+              data-card-block
+              className={`shrink-0 ${isMinimal ? "py-2" : ""}`}
+            >
               <div className="flex items-start justify-between gap-3">
                 <p
                   data-export-label
@@ -406,7 +424,7 @@ export default function ResultCard({
               <p
                 data-export-latency
                 className={`font-mono font-medium tracking-tight ${metricPrimary} ${
-                  isSquare ? "mt-1 text-5xl" : "mt-2 text-6xl sm:text-7xl"
+                  isMinimal ? "mt-4 text-7xl sm:text-8xl" : "mt-2 text-6xl sm:text-7xl"
                 }`}
                 style={{
                   fontFamily: "var(--font-geist-mono), ui-monospace, monospace",
@@ -417,7 +435,7 @@ export default function ResultCard({
                 <span
                   data-export-latency-unit
                   className={`ml-2 align-baseline font-sans font-normal tracking-[0.18em] ${labelMuted} ${
-                    isSquare ? "text-xs" : "text-sm"
+                    isMinimal ? "text-base" : "text-sm"
                   }`}
                 >
                   ms
@@ -425,7 +443,9 @@ export default function ResultCard({
               </p>
               <div
                 data-export-bar
-                className={`h-[2px] w-full overflow-hidden ${isSquare ? "mt-2" : "mt-5"}`}
+                className={`h-[2px] w-full overflow-hidden ${
+                  isMinimal ? "mt-6" : "mt-5"
+                }`}
                 style={{ backgroundColor: tier.accentSoft }}
               >
                 <div
@@ -439,7 +459,7 @@ export default function ResultCard({
               </div>
               <div
                 className={`flex items-center justify-between gap-3 ${
-                  isSquare ? "mt-2" : "mt-4"
+                  isMinimal ? "mt-5" : "mt-4"
                 }`}
               >
                 <p
@@ -459,9 +479,7 @@ export default function ResultCard({
                   />
                   <span
                     data-export-title
-                    className={`tracking-wide ${titleTone} ${
-                      isSquare ? "text-xs" : "text-sm"
-                    }`}
+                    className={`tracking-wide ${titleTone} text-sm`}
                   >
                     {tier.title}
                   </span>
@@ -484,9 +502,7 @@ export default function ResultCard({
               </div>
               <p
                 data-export-mono
-                className={`font-mono text-[9px] tracking-[0.2em] ${labelMuted} ${
-                  isSquare ? "mt-1" : "mt-2"
-                }`}
+                className={`mt-2 font-mono text-[9px] tracking-[0.2em] ${labelMuted}`}
               >
                 {tier.titleEn}
               </p>
@@ -495,7 +511,7 @@ export default function ResultCard({
             <section
               data-card-block
               className={`grid shrink-0 grid-cols-2 border-y ${rule} ${
-                isSquare ? "gap-3 py-2" : "gap-5 py-5"
+                isMinimal ? "gap-5 py-7" : "gap-5 py-5"
               }`}
             >
               <div>
@@ -507,9 +523,7 @@ export default function ResultCard({
                 </p>
                 <p
                   data-export-metric
-                  className={`font-mono tracking-tight ${metricPrimary} ${
-                    isSquare ? "mt-1 text-2xl" : "mt-2 text-3xl"
-                  }`}
+                  className={`mt-2 font-mono text-3xl tracking-tight ${metricPrimary}`}
                   style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
                 >
                   {lossDisplay}
@@ -517,14 +531,11 @@ export default function ResultCard({
                     ms
                   </span>
                 </p>
-                <p
-                  data-export-mono
-                  className={`text-[10px] ${metricSub} ${
-                    isSquare ? "mt-1 leading-tight" : "mt-2 leading-4"
-                  }`}
-                >
-                  {tier.interferenceLabel}
-                </p>
+                {!isMinimal ? (
+                  <p className={`mt-2 text-[10px] leading-4 ${metricSub}`}>
+                    {tier.interferenceLabel}
+                  </p>
+                ) : null}
               </div>
               <div>
                 <p
@@ -535,9 +546,7 @@ export default function ResultCard({
                 </p>
                 <p
                   data-export-metric
-                  className={`font-mono tracking-tight ${metricPrimary} ${
-                    isSquare ? "mt-1 text-2xl" : "mt-2 text-3xl"
-                  }`}
+                  className={`mt-2 font-mono tracking-tight ${metricPrimary} text-3xl`}
                   style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
                 >
                   {acc}
@@ -545,33 +554,33 @@ export default function ResultCard({
                     %
                   </span>
                 </p>
-                <p
-                  data-export-mono
-                  className={`text-[10px] ${metricSub} ${
-                    isSquare ? "mt-1 leading-tight" : "mt-2 leading-4"
-                  }`}
-                >
-                  ACC
-                </p>
+                {!isMinimal ? (
+                  <p className={`mt-2 text-[10px] leading-4 ${metricSub}`}>ACC</p>
+                ) : null}
               </div>
             </section>
 
-            <section data-card-block className="shrink-0">
-              <p
-                data-export-label
-                className={`text-[8px] uppercase tracking-[0.22em] ${labelMuted}`}
-              >
-                {t.breath}
-              </p>
+            <section
+              data-card-block
+              className={`shrink-0 ${isMinimal ? "py-1" : ""}`}
+            >
+              {!isMinimal ? (
+                <p
+                  data-export-label
+                  className={`text-[8px] uppercase tracking-[0.22em] ${labelMuted}`}
+                >
+                  {t.breath}
+                </p>
+              ) : null}
               <div
                 className={`flex items-end justify-between gap-3 ${
-                  isSquare ? "mt-1.5" : "mt-3"
+                  isMinimal ? "" : "mt-3"
                 }`}
               >
                 <p
                   data-export-metric
                   className={`font-mono tracking-tight ${
-                    isSquare ? "text-base" : "text-2xl"
+                    isMinimal ? "text-xl" : "text-2xl"
                   }`}
                   style={{
                     fontFamily: "var(--font-geist-mono), ui-monospace, monospace",
@@ -583,87 +592,83 @@ export default function ResultCard({
                 >
                   {tier.breathLabel}
                 </p>
-                <DiamondGauge
-                  filled={tier.diamondFilled}
-                  color={tier.accent}
-                  spectrumColors={tier.diamondColors}
-                />
+                {!isMinimal ? (
+                  <DiamondGauge
+                    filled={tier.diamondFilled}
+                    color={tier.accent}
+                    spectrumColors={tier.diamondColors}
+                  />
+                ) : null}
               </div>
             </section>
 
-            <section
-              data-card-block
-              className={`min-h-0 shrink ${
-                isApex || isCritical
-                  ? `rounded-lg border ${
-                      isCritical
-                        ? "border-red-900/50 bg-zinc-900/80"
-                        : "border-zinc-800 bg-zinc-900/60"
-                    } ${isSquare ? "px-2.5 py-2" : "px-3 py-3"}`
-                  : ""
-              }`}
-            >
-              <p
-                data-export-label
-                className={`text-[8px] uppercase tracking-[0.22em] ${labelMuted}`}
-              >
-                {t.status}
-              </p>
-              <div className={isSquare ? "mt-1.5 space-y-1" : "mt-3 space-y-2"}>
-                <p
-                  data-export-mono
-                  className={`font-mono tracking-[0.08em] ${statusMono} ${
-                    isSquare ? "text-[10px]" : "text-[11px]"
-                  }`}
-                >
-                  {tier.statusPrimary}
-                </p>
-                <p
-                  data-export-mono
-                  className={`font-mono tracking-[0.08em] ${statusMono} ${
-                    isSquare ? "text-[10px]" : "text-[11px]"
-                  }`}
-                >
-                  {tier.statusSecondary}
-                </p>
-                <p
-                  data-export-mono
-                  className={`font-mono tracking-[0.08em] ${statusMono} ${
-                    isSquare ? "text-[10px]" : "text-[11px]"
-                  }`}
-                >
-                  {protocolLabel}
-                </p>
-              </div>
-              <p
-                data-export-body
-                className={`${diagnosisTone} ${
-                  isSquare
-                    ? "mt-2 text-[10px] leading-tight"
-                    : "mt-4 text-[12px] leading-5"
-                }`}
-              >
-                {tier.diagnosis}
-              </p>
-              <div
-                className={`flex items-end justify-between border-t ${rule} ${
-                  isSquare ? "mt-2 pt-1.5" : "mt-5 pt-4"
+            {!isMinimal ? (
+              <section
+                data-card-block
+                className={`min-h-0 shrink ${
+                  isApex || isCritical
+                    ? `rounded-lg border px-3 py-3 ${
+                        isCritical
+                          ? "border-red-900/50 bg-zinc-900/80"
+                          : "border-zinc-800 bg-zinc-900/60"
+                      }`
+                    : ""
                 }`}
               >
                 <p
                   data-export-label
                   className={`text-[8px] uppercase tracking-[0.22em] ${labelMuted}`}
                 >
-                  {t.watermark}
+                  {t.status}
                 </p>
+                <div className="mt-3 space-y-2">
+                  <p
+                    data-export-mono
+                    className={`font-mono text-[11px] tracking-[0.08em] ${statusMono}`}
+                  >
+                    {tier.statusPrimary}
+                  </p>
+                  <p
+                    data-export-mono
+                    className={`font-mono text-[11px] tracking-[0.08em] ${statusMono}`}
+                  >
+                    {tier.statusSecondary}
+                  </p>
+                  <p
+                    data-export-mono
+                    className={`font-mono text-[11px] tracking-[0.08em] ${statusMono}`}
+                  >
+                    {protocolLabel}
+                  </p>
+                </div>
                 <p
-                  data-export-mono
-                  className={`font-mono text-[9px] tracking-[0.16em] ${watermarkTone}`}
+                  data-export-body
+                  className={`mt-4 text-[12px] leading-5 ${diagnosisTone}`}
                 >
-                  {sessionId}
+                  {tier.diagnosis}
                 </p>
-              </div>
-            </section>
+              </section>
+            ) : null}
+
+            <footer
+              data-card-block
+              className={`flex shrink-0 items-end justify-between border-t ${rule} ${
+                isMinimal ? "pt-5" : "pt-4"
+              }`}
+            >
+              <p
+                data-export-label
+                className={`text-[8px] uppercase tracking-[0.22em] ${labelMuted}`}
+              >
+                {t.watermark}
+              </p>
+              <p
+                data-export-mono
+                className={`font-mono text-[9px] tracking-[0.16em] ${watermarkTone}`}
+              >
+                {sessionId}
+              </p>
+            </footer>
           </div>
         </div>
       </div>
@@ -673,10 +678,11 @@ export default function ResultCard({
         onClick={() => {
           void handleSave();
         }}
-        disabled={busy}
+        disabled={isExporting}
+        data-export-hide
         className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-[#f8fafc] px-5 text-sm font-medium tracking-wide text-slate-900 transition hover:bg-white disabled:opacity-60"
       >
-        {busy ? t.saving : t.save}
+        {isExporting ? t.saving : t.save}
       </button>
       {toast ? (
         <p className="text-center text-xs tracking-wide text-slate-500">{toast}</p>
