@@ -38,7 +38,10 @@ type StroopResult = {
 };
 
 const TARGET_CYCLES = 3;
-const REACTION_TRIALS = 3;
+const REACTION_TRIALS = 5;
+const FOREPERIOD_MIN_MS = 1500;
+const FOREPERIOD_MAX_MS = 6000;
+const FALSE_START_MS = 150;
 const STROOP_COUNT = 4;
 const BUFFER_SECONDS = 2;
 const STROOP_BUFFER_SECONDS = 3;
@@ -115,7 +118,7 @@ const COPY = {
 } as const;
 
 function randomWait() {
-  return 1000 + Math.random() * 2000;
+  return FOREPERIOD_MIN_MS + Math.random() * (FOREPERIOD_MAX_MS - FOREPERIOD_MIN_MS);
 }
 
 function isSpaceKey(event: KeyboardEvent) {
@@ -143,6 +146,37 @@ function buildStroopTrials(): StroopTrial[] {
 function mean(values: number[]) {
   if (values.length === 0) return 0;
   return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function median(values: number[]) {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) {
+    return (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+  return sorted[mid];
+}
+
+function sampleStdDev(values: number[]) {
+  if (values.length < 2) return 0;
+  const avg = mean(values);
+  const variance =
+    values.reduce((sum, value) => sum + (value - avg) ** 2, 0) / (values.length - 1);
+  return Math.sqrt(variance);
+}
+
+function interquartileRange(values: number[]) {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const quantile = (p: number) => {
+    const idx = (sorted.length - 1) * p;
+    const lo = Math.floor(idx);
+    const hi = Math.ceil(idx);
+    if (lo === hi) return sorted[lo];
+    return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+  };
+  return quantile(0.75) - quantile(0.25);
 }
 
 function readScale(element: HTMLElement | null) {
@@ -407,19 +441,29 @@ export default function Home() {
     if (sessionStageRef.current !== "srt") return;
     if (current === "buffer" || current === "ready") return;
 
-    if (current === "waiting") {
+    const markFalseStart = () => {
       reactionPhaseRef.current = "too_soon";
       clearTimer(waitTimerRef);
       setReactionPhase("too_soon");
       waitTimerRef.current = window.setTimeout(() => {
         armTrial();
       }, 900);
+    };
+
+    if (current === "waiting") {
+      markFalseStart();
       return;
     }
 
     if (current !== "go" || goAtRef.current === null) return;
 
     const ms = Math.round(performance.now() - goAtRef.current);
+    if (ms < FALSE_START_MS) {
+      goAtRef.current = null;
+      markFalseStart();
+      return;
+    }
+
     const next = [...latenciesRef.current, ms];
     latenciesRef.current = next;
     reactionPhaseRef.current = "recorded";
@@ -464,7 +508,7 @@ export default function Home() {
 
       const nextIndex = stroopIndexRef.current + 1;
       if (nextIndex >= STROOP_COUNT) {
-        const avgLatency = Math.round(mean(latenciesRef.current));
+        const avgLatency = Math.round(median(latenciesRef.current));
         const congruent = nextResults.filter((item) => item.congruent).map((item) => item.latencyMs);
         const incongruent = nextResults
           .filter((item) => !item.congruent)
@@ -651,8 +695,18 @@ export default function Home() {
     injectMockTier(key);
   }, [injectMockTier]);
 
+  useEffect(() => {
+    if (latencies.length !== REACTION_TRIALS) return;
+    console.log("[Mind OS] SRT variability", {
+      trials: latencies,
+      median: Math.round(median(latencies)),
+      sd: Number(sampleStdDev(latencies).toFixed(1)),
+      iqr: Number(interquartileRange(latencies).toFixed(1)),
+    });
+  }, [latencies]);
+
   const avgSrt =
-    latencies.length === REACTION_TRIALS ? Math.round(mean(latencies)) : null;
+    latencies.length === REACTION_TRIALS ? Math.round(median(latencies)) : null;
   const rawInterference =
     stroopResults.length === STROOP_COUNT
       ? Math.round(

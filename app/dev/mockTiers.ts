@@ -98,7 +98,7 @@ export function parseMockTierKey(raw: string | null | undefined): MockTierKey | 
 
 /** Build synthetic SRT + Stroop arrays that resolve to the target averages. */
 export function buildMockTrialData(payload: MockTierPayload) {
-  const latencies = [payload.latency, payload.latency, payload.latency];
+  const latencies = Array.from({ length: 5 }, () => payload.latency);
 
   const congruentMs = 320;
   const incongruentMs = congruentMs + payload.interference;

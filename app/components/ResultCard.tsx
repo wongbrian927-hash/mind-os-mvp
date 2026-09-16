@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toBlob, toPng } from "html-to-image";
+import QRCode from "qrcode";
 import type { BenchmarkData } from "@/types/benchmark";
 import {
   getTierConfig,
@@ -9,6 +10,7 @@ import {
   type ApexVariant,
   type TierLevel,
 } from "@/lib/calculateTier";
+import { PUBLIC_HOST, SHARE_URL } from "@/lib/config";
 import Logo from "@/app/components/Logo";
 
 export type ResultCardLang = "zh" | "en";
@@ -45,7 +47,7 @@ const COPY = {
     accuracy: "FOCUS ACCURACY",
     breath: "5-5 CALIBRATION",
     status: "STATUS LABELS",
-    watermark: "Mind OS · Bio-Quant Protocol",
+    qrHint: "試下你嘅反應速度",
   },
   en: {
     brand: "MIND OS",
@@ -61,7 +63,7 @@ const COPY = {
     accuracy: "FOCUS ACCURACY",
     breath: "5-5 CALIBRATION",
     status: "STATUS LABELS",
-    watermark: "Mind OS · Bio-Quant Protocol",
+    qrHint: "Try your reaction speed",
   },
 } as const;
 
@@ -218,6 +220,8 @@ export default function ResultCard({
   const [viewMode, setViewMode] = useState<CardViewMode>("detailed");
   const [isExporting, setIsExporting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [qrReady, setQrReady] = useState(false);
 
   const t = COPY[lang];
   const tier = useMemo(
@@ -248,8 +252,40 @@ export default function ResultCard({
   const utcStamp = formatUtcStamp(reportAt);
   const lossDisplay = interferenceDisplay(interference);
 
+  useEffect(() => {
+    let cancelled = false;
+    setQrReady(false);
+    setQrDataUrl(null);
+
+    void (async () => {
+      try {
+        const dataUrl = await QRCode.toDataURL(SHARE_URL, {
+          errorCorrectionLevel: "M",
+          margin: 2,
+          width: 160,
+          color: { dark: "#000000", light: "#FFFFFF" },
+        });
+        const image = new Image();
+        image.src = dataUrl;
+        await image.decode();
+        if (cancelled) return;
+        setQrDataUrl(dataUrl);
+        setQrReady(true);
+      } catch {
+        if (!cancelled) {
+          setQrReady(false);
+          setQrDataUrl(null);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleSave = useCallback(async () => {
-    if (!cardRef.current || isExporting) return;
+    if (!cardRef.current || isExporting || !qrReady) return;
     setIsExporting(true);
     setToast(null);
     try {
@@ -266,7 +302,7 @@ export default function ResultCard({
       setIsExporting(false);
       window.setTimeout(() => setToast(null), 2600);
     }
-  }, [isExporting, lang, onSaved, sessionId, t.saved, tier.cardBackground]);
+  }, [isExporting, lang, onSaved, qrReady, sessionId, t.saved, tier.cardBackground]);
 
   const isApex = tier.isApex;
   const isCritical = tier.level === 4;
@@ -281,7 +317,6 @@ export default function ResultCard({
   const statusMono = isDarkCard ? "text-slate-300" : "text-zinc-700";
   const diagnosisTone = isDarkCard ? "text-slate-300" : "text-zinc-500";
   const sessionTone = isDarkCard ? "text-slate-400" : "text-zinc-600";
-  const watermarkTone = isDarkCard ? "text-slate-500" : "text-zinc-500";
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col items-center gap-4">
@@ -652,22 +687,45 @@ export default function ResultCard({
 
             <footer
               data-card-block
-              className={`flex shrink-0 items-end justify-between border-t ${rule} ${
+              className={`flex shrink-0 items-end justify-between gap-3 border-t ${rule} ${
                 isMinimal ? "pt-5" : "pt-4"
               }`}
             >
               <p
                 data-export-label
-                className={`text-[8px] uppercase tracking-[0.22em] ${labelMuted}`}
+                className={`min-w-0 text-[8px] tracking-[0.22em] ${labelMuted}`}
               >
-                {t.watermark}
+                {PUBLIC_HOST}
               </p>
-              <p
-                data-export-mono
-                className={`font-mono text-[9px] tracking-[0.16em] ${watermarkTone}`}
-              >
-                {sessionId}
-              </p>
+              <div className="flex w-[15%] min-w-[40px] shrink-0 flex-col items-end gap-1">
+                <p
+                  className={`whitespace-nowrap text-right text-[7px] leading-tight tracking-wide ${labelMuted}`}
+                >
+                  {t.qrHint}
+                </p>
+                <div
+                  className="box-content w-full rounded-[10px] bg-white p-1.5"
+                  style={{
+                    boxShadow: isDarkCard
+                      ? "0 4px 12px rgba(0, 0, 0, 0.3)"
+                      : "0 2px 8px rgba(0, 0, 0, 0.08)",
+                  }}
+                >
+                  {qrDataUrl ? (
+                    // Data URL only — next/image is unnecessary and can taint export.
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={qrDataUrl}
+                      alt=""
+                      width={160}
+                      height={160}
+                      className="block h-auto w-full"
+                    />
+                  ) : (
+                    <div className="aspect-square w-full bg-white" />
+                  )}
+                </div>
+              </div>
             </footer>
           </div>
         </div>
@@ -678,7 +736,7 @@ export default function ResultCard({
         onClick={() => {
           void handleSave();
         }}
-        disabled={isExporting}
+        disabled={isExporting || !qrReady}
         data-export-hide
         className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-[#f8fafc] px-5 text-sm font-medium tracking-wide text-slate-900 transition hover:bg-white disabled:opacity-60"
       >
