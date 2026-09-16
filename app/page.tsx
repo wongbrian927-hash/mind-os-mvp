@@ -778,8 +778,9 @@ function Home() {
 
       <main
         className={`relative z-10 mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-4 px-4 pt-16 sm:gap-8 sm:px-10 sm:pt-10 ${
-          sessionStage === "summary"
-            ? "overflow-y-auto pb-24 sm:pb-28"
+          sessionStage === "summary" ||
+          (sessionStage === "srt" && reactionPhase === "ready")
+            ? "overflow-y-auto pb-10 sm:pb-12"
             : "overflow-hidden pb-6 sm:pb-10"
         }`}
       >
@@ -1045,7 +1046,7 @@ function Home() {
 
       <p
         aria-label="Disclaimer"
-        className="absolute inset-x-0 bottom-0 z-[5] mx-auto max-w-3xl px-4 pb-4 text-center font-mono text-[9px] leading-relaxed tracking-widest text-white/20 transition-opacity duration-300 hover:text-white/50 sm:pb-6 sm:text-[10px]"
+        className="relative z-[5] mx-auto mt-auto w-full max-w-3xl shrink-0 px-4 pb-8 pt-6 text-center font-mono text-[9px] leading-relaxed tracking-widest text-white/20 transition-opacity duration-300 hover:text-white/50 sm:pb-10 sm:pt-8 sm:text-[10px]"
       >
         {t.disclaimer}
       </p>

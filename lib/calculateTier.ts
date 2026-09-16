@@ -143,7 +143,7 @@ export function isTierZero(
   >,
 ) {
   return (
-    data.latency < 180 &&
+    data.latency <= 200 &&
     data.interference <= 0 &&
     data.accuracy === 100 &&
     data.completedBreathingBeforeTest
