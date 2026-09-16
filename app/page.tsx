@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import ResultCard from "@/app/components/ResultCard";
 import DevTierMockPanel from "@/app/components/DevTierMockPanel";
 import Logo from "@/app/components/Logo";
@@ -210,7 +211,22 @@ function LockIcon() {
   );
 }
 
-export default function Home() {
+export default function HomePage() {
+  return (
+    <Suspense fallback={<HomeFallback />}>
+      <Home />
+    </Suspense>
+  );
+}
+
+function HomeFallback() {
+  return (
+    <div className="relative flex min-h-full flex-1 flex-col bg-[#0f172a] text-[#f8fafc]" />
+  );
+}
+
+function Home() {
+  const searchParams = useSearchParams();
   const [lang, setLang] = useState<Lang>("zh");
   const t = COPY[lang];
 
@@ -688,12 +704,10 @@ export default function Home() {
 
   useEffect(() => {
     if (!IS_DEV) return;
-    const key = parseMockTierKey(
-      new URLSearchParams(window.location.search).get("mock"),
-    );
+    const key = parseMockTierKey(searchParams.get("mock"));
     if (!key) return;
     injectMockTier(key);
-  }, [injectMockTier]);
+  }, [injectMockTier, searchParams]);
 
   useEffect(() => {
     if (latencies.length !== REACTION_TRIALS) return;

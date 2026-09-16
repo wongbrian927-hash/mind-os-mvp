@@ -10,7 +10,7 @@ import {
   type ApexVariant,
   type TierLevel,
 } from "@/lib/calculateTier";
-import { PUBLIC_HOST, shareCardUrl } from "@/lib/config";
+import { PUBLIC_HOST, PUBLIC_URL } from "@/lib/config";
 import Logo from "@/app/components/Logo";
 
 export type ResultCardLang = "zh" | "en";
@@ -254,7 +254,7 @@ export default function ResultCard({
   const isCritical = tier.level === 4;
   const isDarkCard = isApex || isCritical;
   const currentTier = String(tier.level).padStart(2, "0");
-  const shareUrl = shareCardUrl(currentTier);
+  const shareUrl = `${PUBLIC_URL}/?source=share_card&tier=${currentTier}`;
 
   useEffect(() => {
     setQrReady(false);
