@@ -12,6 +12,8 @@ import {
 } from "@/lib/calculateTier";
 import { PUBLIC_HOST, PUBLIC_URL } from "@/lib/config";
 import Logo from "@/app/components/Logo";
+import WallpaperModal from "@/app/components/WallpaperModal";
+import { getBasePortalWallpaper, getTierWallpaper, WALLPAPER_I18N } from "@/lib/wallpapers";
 
 export type ResultCardLang = "zh" | "en";
 export type CardViewMode = "detailed" | "minimal";
@@ -262,6 +264,7 @@ export default function ResultCard({
   const [isExporting, setIsExporting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [qrReady, setQrReady] = useState(false);
+  const [showWallpaperModal, setShowWallpaperModal] = useState(false);
 
   const t = COPY[lang];
   const tier = useMemo(
@@ -297,6 +300,12 @@ export default function ResultCard({
   const isDarkCard = isApex || isCritical;
   const currentTier = isVoid ? "00x" : String(tier.level).padStart(2, "0");
   const shareUrl = `${PUBLIC_URL}/?source=share_card&tier=${currentTier}`;
+  const wallpaperCopy = WALLPAPER_I18N[lang];
+  const tierWallpaper = useMemo(
+    () => getTierWallpaper(tier.level, tier.variant, lang),
+    [lang, tier.level, tier.variant],
+  );
+  const baseWallpaper = useMemo(() => getBasePortalWallpaper(lang), [lang]);
 
   useEffect(() => {
     setQrReady(false);
@@ -871,8 +880,24 @@ export default function ResultCard({
       >
         {isExporting ? t.saving : t.save}
       </button>
+      <button
+        type="button"
+        data-export-hide
+        onClick={() => setShowWallpaperModal(true)}
+        className="flex items-center justify-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/60 px-4 py-2.5 font-mono text-xs tracking-wider text-zinc-300 transition-all hover:bg-zinc-800"
+      >
+        {wallpaperCopy.btn}
+      </button>
       {toast ? (
         <p className="text-center text-xs tracking-wide text-slate-500">{toast}</p>
+      ) : null}
+      {showWallpaperModal ? (
+        <WallpaperModal
+          lang={lang}
+          tierWallpaper={tierWallpaper}
+          baseWallpaper={baseWallpaper}
+          onClose={() => setShowWallpaperModal(false)}
+        />
       ) : null}
     </div>
   );
