@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ResultCardLang } from "@/lib/calculateTier";
 import type { WallpaperAsset } from "@/lib/wallpapers";
 import { WALLPAPER_I18N } from "@/lib/wallpapers";
@@ -14,6 +14,44 @@ type WallpaperModalProps = {
   onClose: () => void;
 };
 
+function wallpaperFileName(src: string, title: string) {
+  const fromPath = src.split("/").pop();
+  if (fromPath && fromPath.endsWith(".png")) return fromPath;
+  const slug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return `${slug || "mind-os-wallpaper"}.png`;
+}
+
+async function handleSaveWallpaper(imageUrl: string, fileName: string) {
+  try {
+    const response = await fetch(imageUrl);
+    const blob = await response.blob();
+    const file = new File([blob], fileName, { type: blob.type || "image/png" });
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({
+        files: [file],
+        title: fileName,
+      });
+      return;
+    }
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") return;
+    console.error("Failed to save wallpaper:", error);
+  }
+}
+
 export default function WallpaperModal({
   lang,
   tierWallpaper,
@@ -21,6 +59,7 @@ export default function WallpaperModal({
   onClose,
 }: WallpaperModalProps) {
   const [tab, setTab] = useState<WallpaperTab>("tier");
+  const [isSaving, setIsSaving] = useState(false);
   const copy = WALLPAPER_I18N[lang];
   const activeWallpaper = tab === "base" ? baseWallpaper : tierWallpaper;
 
@@ -36,6 +75,19 @@ export default function WallpaperModal({
       window.removeEventListener("keydown", onKey);
     };
   }, [onClose]);
+
+  const onSave = useCallback(async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      await handleSaveWallpaper(
+        activeWallpaper.src,
+        wallpaperFileName(activeWallpaper.src, activeWallpaper.title),
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  }, [activeWallpaper.src, activeWallpaper.title, isSaving]);
 
   return (
     <div
@@ -88,13 +140,16 @@ export default function WallpaperModal({
           {activeWallpaper.desc}
         </p>
         <p className="mt-2 font-mono text-[11px] text-zinc-500">{copy.mobileTip}</p>
-        <a
-          href={activeWallpaper.src}
-          download
-          className="mt-3 rounded border border-zinc-600 px-4 py-1.5 font-mono text-xs text-zinc-200 transition-colors hover:bg-zinc-800"
+        <button
+          type="button"
+          onClick={() => {
+            void onSave();
+          }}
+          disabled={isSaving}
+          className="mt-3 rounded border border-zinc-600 px-4 py-1.5 font-mono text-xs text-zinc-200 transition-colors hover:bg-zinc-800 disabled:opacity-60"
         >
           {copy.downloadBtn}
-        </a>
+        </button>
         <button
           type="button"
           onClick={onClose}
