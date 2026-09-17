@@ -1,6 +1,7 @@
 export type TierLevel = 0 | 1 | 2 | 3 | 4;
 export type ResultCardLang = "zh" | "en";
-export type ApexVariant = "aurora" | "midnight-sun";
+export type ApexSkin = "aurora" | "midnight-sun";
+export type ApexVariant = ApexSkin | "void";
 
 export type TierInput = {
   latency: number;
@@ -53,7 +54,7 @@ export const TIER_BASELINE_LOSS: Record<TierLevel, number> = {
 };
 
 export const APEX_VARIANT_PRESETS: Record<
-  ApexVariant,
+  ApexSkin,
   {
     accent: string;
     accentSoft: string;
@@ -86,7 +87,7 @@ export const APEX_VARIANT_PRESETS: Record<
       "radial-gradient(ellipse 70% 45% at 85% 28%, rgba(168,85,247,0.14), transparent 52%)",
       "radial-gradient(ellipse 90% 40% at 50% 100%, rgba(96,239,255,0.1), transparent 48%)",
     ].join(", "),
-    percentLabel: "★ TOP 0.01% · AURORA APEX",
+    percentLabel: "TOP 1%",
     breathLabel: "PERFECT SYNC",
   },
   "midnight-sun": {
@@ -106,12 +107,12 @@ export const APEX_VARIANT_PRESETS: Record<
       "radial-gradient(ellipse 60% 35% at 15% 0%, rgba(255,226,89,0.1), transparent 48%)",
       "radial-gradient(ellipse 50% 30% at 90% 20%, rgba(255,88,88,0.08), transparent 45%)",
     ].join(", "),
-    percentLabel: "★ TOP 0.01% · MIDNIGHT SOLAR",
+    percentLabel: "TOP 1%",
     breathLabel: "SOLAR EQUILIBRIUM",
   },
 };
 
-export function pickRandomApexVariant(): ApexVariant {
+export function pickRandomApexVariant(): ApexSkin {
   return Math.random() < 0.5 ? "aurora" : "midnight-sun";
 }
 
@@ -136,26 +137,42 @@ function accuracyBand(accuracy: number): Exclude<TierLevel, 0> {
   return 1;
 }
 
-export function isTierZero(
-  data: Pick<
-    TierInput,
-    "latency" | "interference" | "accuracy" | "completedBreathingBeforeTest"
-  >,
-) {
+type TierGateInput = Pick<
+  TierInput,
+  "latency" | "interference" | "accuracy" | "completedBreathingBeforeTest"
+>;
+
+/** Hidden TIER 00X · Monochrome Void — deterministic; no probability. */
+export function isTier00XEligible(data: TierGateInput) {
   return (
-    data.latency <= 200 &&
+    data.completedBreathingBeforeTest === true &&
+    data.latency < 200 &&
     data.interference <= 0 &&
+    data.accuracy === 100
+  );
+}
+
+/** Ordinary TIER 00 — aurora / midnight-sun, TOP 1%. */
+export function isStandardTierZero(data: TierGateInput) {
+  return (
+    data.latency < 215 &&
+    data.interference < 25 &&
     data.accuracy === 100 &&
     data.completedBreathingBeforeTest
   );
 }
 
+export function isTierZero(data: TierGateInput) {
+  return isTier00XEligible(data) || isStandardTierZero(data);
+}
+
 /**
  * Worst-dimension wins (higher tier number = more degraded).
  * Ensures Interference Loss and overall grade stay monotonically aligned.
+ * Hidden TIER 00 is evaluated before standard TIER 00.
  */
 export function calculateTierLevel(data: TierInput): TierLevel {
-  if (isTierZero(data)) return 0;
+  if (isTier00XEligible(data) || isStandardTierZero(data)) return 0;
   return Math.max(
     latencyBand(data.latency),
     interferenceBand(data.interference),
@@ -185,8 +202,39 @@ export function getTierConfig(data: TierInput): TierConfig {
   const level = calculateTierLevel(data);
   const diamondFilled = (5 - level) as 1 | 2 | 3 | 4 | 5;
 
+  if (apexVariant === "void" || (isTier00XEligible(data) && apexVariant !== "aurora" && apexVariant !== "midnight-sun")) {
+    return {
+      level: 0,
+      diamondFilled: 5,
+      accent: "#FAFAFA",
+      accentSoft: "rgba(255,255,255,0.06)",
+      glow: "0 0 8px rgba(255,255,255,0.45)",
+      cardShadow: "0 0 25px rgba(255,255,255,0.06)",
+      cardBorder: "rgba(63, 63, 70, 0.6)",
+      cardBackground: "#09090b",
+      progress: 1,
+      title: "TIER 00X · MONOCHROME VOID",
+      titleEn: "TIER 00X · MONOCHROME VOID",
+      percentLabel: "TITANIUM PURITY · TOP 0.01%",
+      statusPrimary: "Trapezius: Deep Released",
+      statusSecondary: "Focus Index: Titanium Purity",
+      diagnosis: isZh
+        ? "神經訊號已抽乾色相，進入單色鈦金屬態。傳導阻抗趨近真空。"
+        : "Neural signal drained of chroma — monochrome titanium state. Conduction impedance approaches vacuum.",
+      interferenceLabel: "Zero Interference",
+      breathLabel: "VOID LOCK",
+      isApex: true,
+      variant: "void",
+      spectrumGradient: null,
+      diamondColors: null,
+      latencyFilter: "drop-shadow(0 0 10px rgba(255,255,255,0.3))",
+      radialGlow: null,
+    };
+  }
+
   if (level === 0) {
-    const variant = apexVariant ?? "aurora";
+    const variant: ApexSkin =
+      apexVariant === "midnight-sun" ? "midnight-sun" : "aurora";
     const preset = APEX_VARIANT_PRESETS[variant];
     return {
       level: 0,
@@ -202,7 +250,7 @@ export function getTierConfig(data: TierInput): TierConfig {
       titleEn: "TIER 00",
       percentLabel: preset.percentLabel,
       statusPrimary: "Trapezius: Deep Released",
-      statusSecondary: "Focus Index: APEX 0.01%",
+      statusSecondary: "Focus Index: Top 1%",
       diagnosis: isZh
         ? "神經傳導閾值達到生理極限，前額葉抑制損耗趨近於零，處於極致心流與自主神經高度協調狀態。"
         : "Neural conduction is at the physiological limit. Prefrontal inhibitory loss approaches zero — peak flow with high autonomic coherence.",

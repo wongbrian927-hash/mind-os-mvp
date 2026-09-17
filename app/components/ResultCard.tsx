@@ -98,21 +98,35 @@ function DiamondGauge({
   filled,
   color,
   spectrumColors,
+  emptyColor,
+  voidMode,
 }: {
   filled: number;
   color: string;
   spectrumColors?: string[] | null;
+  emptyColor?: string;
+  voidMode?: boolean;
 }) {
   return (
     <span aria-hidden className="inline-flex font-mono text-[11px] tracking-[0.14em]">
       {Array.from({ length: 5 }, (_, index) => {
+        if (voidMode) {
+          return (
+            <span
+              key={index}
+              className={`${index > 0 ? "ml-[0.14em] " : ""}text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]`}
+            >
+              ◆
+            </span>
+          );
+        }
         const lit = index < filled;
         const tone =
           lit && spectrumColors && spectrumColors[index]
             ? spectrumColors[index]
             : lit
               ? color
-              : "rgba(148,163,184,0.35)";
+              : (emptyColor ?? "rgba(148,163,184,0.35)");
         return (
           <span key={index} style={{ color: tone }} className={index > 0 ? "ml-[0.14em]" : undefined}>
             {lit ? "◆" : "◇"}
@@ -120,6 +134,52 @@ function DiamondGauge({
         );
       })}
     </span>
+  );
+}
+
+function VoidHairline({ className = "my-4" }: { className?: string }) {
+  return (
+    <div
+      aria-hidden
+      className={`h-[1px] w-full bg-gradient-to-r from-transparent via-zinc-200/50 to-transparent ${className}`}
+    />
+  );
+}
+
+function ArchitectSignature() {
+  return (
+    <div className="flex flex-col items-end">
+      <svg
+        viewBox="0 0 140 44"
+        fill="none"
+        aria-hidden
+        className="h-9 w-32 text-zinc-200 opacity-90"
+      >
+        <path
+          d="M10 38 L10 6 C24 4 32 10 24 17 C18 21 10 20 10 20 C28 20 36 28 28 36 C22 41 10 40 10 38"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M34 34 Q35.2 32.2 36.4 34"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+        <path
+          d="M44 36 C48 4 54 4 58 36 C62 4 70 4 74 36 C80 16 90 14 94 24 C97 32 94 37 88 36 C98 14 112 12 120 24 C126 34 122 42 112 42 C124 36 136 20 138 34"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+      <span className="mt-1 font-mono text-[8px] uppercase tracking-[0.22em] text-zinc-400">
+        SYSTEM ARCHITECT
+      </span>
+    </div>
   );
 }
 
@@ -252,8 +312,9 @@ export default function ResultCard({
   const lossDisplay = interferenceDisplay(interference);
   const isApex = tier.isApex;
   const isCritical = tier.level === 4;
+  const isVoid = tier.variant === "void";
   const isDarkCard = isApex || isCritical;
-  const currentTier = String(tier.level).padStart(2, "0");
+  const currentTier = isVoid ? "00x" : String(tier.level).padStart(2, "0");
   const shareUrl = `${PUBLIC_URL}/?source=share_card&tier=${currentTier}`;
 
   useEffect(() => {
@@ -293,15 +354,51 @@ export default function ResultCard({
   }, [isExporting, lang, onSaved, qrReady, sessionId, t.saved, tier.cardBackground]);
 
   const isMinimal = viewMode === "minimal";
-  const labelMuted = isDarkCard ? "text-slate-400" : "text-zinc-400";
-  const labelSoft = isDarkCard ? "text-slate-400" : "text-zinc-500";
-  const metricPrimary = isDarkCard ? "text-zinc-100" : "text-[#0F1115]";
-  const metricSub = isDarkCard ? "text-slate-400" : "text-zinc-500";
-  const rule = isDarkCard ? "border-zinc-800" : "border-zinc-800/10";
-  const titleTone = isDarkCard ? "text-zinc-100" : "text-zinc-800";
-  const statusMono = isDarkCard ? "text-slate-300" : "text-zinc-700";
-  const diagnosisTone = isDarkCard ? "text-slate-300" : "text-zinc-500";
-  const sessionTone = isDarkCard ? "text-slate-400" : "text-zinc-600";
+  const labelMuted = isVoid
+    ? "text-zinc-400"
+    : isDarkCard
+      ? "text-slate-400"
+      : "text-zinc-400";
+  const labelSoft = isVoid
+    ? "text-zinc-400"
+    : isDarkCard
+      ? "text-slate-400"
+      : "text-zinc-500";
+  const metricPrimary = isVoid
+    ? "text-white"
+    : isDarkCard
+      ? "text-zinc-100"
+      : "text-[#0F1115]";
+  const metricSub = isVoid
+    ? "text-zinc-400"
+    : isDarkCard
+      ? "text-slate-400"
+      : "text-zinc-500";
+  const rule = isVoid
+    ? "border-zinc-700/60"
+    : isDarkCard
+      ? "border-zinc-800"
+      : "border-zinc-800/10";
+  const titleTone = isVoid
+    ? "text-white"
+    : isDarkCard
+      ? "text-zinc-100"
+      : "text-zinc-800";
+  const statusMono = isVoid
+    ? "text-zinc-400"
+    : isDarkCard
+      ? "text-slate-300"
+      : "text-zinc-700";
+  const diagnosisTone = isVoid
+    ? "text-zinc-400"
+    : isDarkCard
+      ? "text-slate-300"
+      : "text-zinc-500";
+  const sessionTone = isVoid
+    ? "text-zinc-400"
+    : isDarkCard
+      ? "text-slate-400"
+      : "text-zinc-600";
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col items-center gap-4">
@@ -342,20 +439,22 @@ export default function ResultCard({
           className={`relative aspect-[9/16] w-full overflow-hidden ${
             isCritical
               ? `${isExporting ? "" : "animate-pulse"} border border-red-900/80 bg-zinc-950 text-zinc-100 shadow-[0_0_25px_rgba(220,38,38,0.25)]`
-              : isApex
-                ? "text-slate-50"
-                : "bg-[#F8F9FA] text-[#0F1115]"
+              : isVoid
+                ? "border border-zinc-700/60 bg-[#09090b] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-800/20 via-[#09090b] to-black text-white shadow-[0_0_25px_rgba(255,255,255,0.06)]"
+                : isApex
+                  ? "text-slate-50"
+                  : "bg-[#F8F9FA] text-[#0F1115]"
           }`}
           style={{
             fontFamily: "var(--font-geist-sans), Helvetica, Arial, sans-serif",
-            border: isCritical ? undefined : `1px solid ${tier.cardBorder}`,
-            boxShadow: isCritical ? undefined : tier.cardShadow,
-            backgroundColor: tier.cardBackground,
+            border: isCritical || isVoid ? undefined : `1px solid ${tier.cardBorder}`,
+            boxShadow: isCritical || isVoid ? undefined : tier.cardShadow,
+            backgroundColor: isVoid ? undefined : tier.cardBackground,
             // Force full opacity while exporting so pulse mid-frame never leaks into PNG.
             opacity: isCritical && isExporting ? 1 : undefined,
           }}
         >
-          {isApex && tier.radialGlow ? (
+          {isApex && !isVoid && tier.radialGlow ? (
             <div
               aria-hidden
               className="pointer-events-none absolute inset-0"
@@ -373,9 +472,9 @@ export default function ResultCard({
           >
             <header
               data-card-block
-              className={`flex shrink-0 items-start justify-between gap-4 border-b ${rule} ${
-                isMinimal ? "pb-5" : "pb-4"
-              }`}
+              className={`flex shrink-0 items-start justify-between gap-4 ${
+                isVoid ? "" : `border-b ${rule}`
+              } ${isMinimal ? "pb-5" : "pb-4"}`}
             >
               <div>
                 <div className={`flex items-center gap-2 ${labelSoft}`}>
@@ -423,6 +522,7 @@ export default function ResultCard({
                 </p>
               </div>
             </header>
+            {isVoid ? <VoidHairline className="my-2" /> : null}
 
             <section
               data-card-block
@@ -438,45 +538,85 @@ export default function ResultCard({
                 <DiamondGauge
                   filled={tier.diamondFilled}
                   color={tier.accent}
-                  spectrumColors={tier.diamondColors}
+                  spectrumColors={isVoid ? null : tier.diamondColors}
+                  voidMode={isVoid}
                 />
               </div>
               <p
                 data-export-latency
-                className={`font-mono font-medium tracking-tight ${metricPrimary} ${
-                  isMinimal ? "mt-4 text-7xl sm:text-8xl" : "mt-2 text-6xl sm:text-7xl"
-                }`}
+                className={`font-mono font-medium tracking-tight ${
+                  isVoid
+                    ? "text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]"
+                    : metricPrimary
+                } ${isMinimal ? "mt-4 text-7xl sm:text-8xl" : "mt-2 text-6xl sm:text-7xl"}`}
                 style={{
                   fontFamily: "var(--font-geist-mono), ui-monospace, monospace",
-                  filter: tier.latencyFilter ?? undefined,
+                  filter: isVoid ? undefined : tier.latencyFilter ?? undefined,
                 }}
               >
                 {avgSrt}
                 <span
                   data-export-latency-unit
-                  className={`ml-2 align-baseline font-sans font-normal tracking-[0.18em] ${labelMuted} ${
-                    isMinimal ? "text-base" : "text-sm"
-                  }`}
+                  className={`ml-2 align-baseline font-sans font-normal tracking-[0.18em] ${
+                    isVoid
+                      ? "text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]"
+                      : labelMuted
+                  } ${isMinimal ? "text-base" : "text-sm"}`}
                 >
                   ms
                 </span>
               </p>
-              <div
-                data-export-bar
-                className={`h-[2px] w-full overflow-hidden ${
-                  isMinimal ? "mt-6" : "mt-5"
-                }`}
-                style={{ backgroundColor: tier.accentSoft }}
-              >
+              {isVoid ? (
+                <VoidHairline />
+              ) : (
                 <div
-                  className="h-full transition-[width] duration-500"
-                  style={{
-                    width: `${Math.round(tier.progress * 100)}%`,
-                    background: tier.spectrumGradient ?? tier.accent,
-                    backgroundColor: tier.accent,
-                  }}
-                />
-              </div>
+                  data-export-bar
+                  className={`h-[2px] w-full overflow-hidden ${
+                    isMinimal ? "mt-6" : "mt-5"
+                  }`}
+                  style={{ backgroundColor: tier.accentSoft }}
+                >
+                  <div
+                    className="h-full transition-[width] duration-500"
+                    style={{
+                      width: `${Math.round(tier.progress * 100)}%`,
+                      background: tier.spectrumGradient ?? tier.accent,
+                      backgroundColor: tier.accent,
+                    }}
+                  />
+                </div>
+              )}
+              {isVoid ? (
+                <div
+                  className={`flex flex-col gap-2 ${isMinimal ? "mt-5" : "mt-4"}`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p
+                      data-export-label
+                      className={`shrink-0 text-[8px] uppercase tracking-[0.24em] ${labelMuted}`}
+                    >
+                      {t.tier}
+                    </p>
+                    <span
+                      data-export-pill
+                      className="shrink-0 rounded-sm border border-zinc-500/50 bg-zinc-800/40 px-2 py-0.5 font-mono text-[8px] tracking-[0.08em] text-zinc-200"
+                    >
+                      {tier.percentLabel}
+                    </span>
+                  </div>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span
+                      className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.7)]"
+                    />
+                    <span
+                      data-export-title
+                      className={`min-w-0 text-sm tracking-wide ${titleTone}`}
+                    >
+                      {tier.title}
+                    </span>
+                  </div>
+                </div>
+              ) : (
               <div
                 className={`flex items-center justify-between gap-3 ${
                   isMinimal ? "mt-5" : "mt-4"
@@ -499,14 +639,16 @@ export default function ResultCard({
                   />
                   <span
                     data-export-title
-                    className={`tracking-wide ${titleTone} text-sm`}
+                    className={`tracking-wide text-sm ${titleTone}`}
                   >
                     {tier.title}
                   </span>
                   <span
                     data-export-pill
                     className={`px-2 py-0.5 font-mono text-[9px] tracking-[0.12em] ${
-                      isApex ? "rounded-sm border-2" : "rounded-full border"
+                      isApex
+                        ? "rounded-sm border-2"
+                        : "rounded-full border"
                     }`}
                     style={{
                       borderColor: isApex ? tier.accent : `${tier.accent}55`,
@@ -520,19 +662,22 @@ export default function ResultCard({
                   </span>
                 </div>
               </div>
-              <p
-                data-export-mono
-                className={`mt-2 font-mono text-[9px] tracking-[0.2em] ${labelMuted}`}
-              >
-                {tier.titleEn}
-              </p>
+              )}
+              {isVoid ? null : (
+                <p
+                  data-export-mono
+                  className={`mt-2 font-mono text-[9px] tracking-[0.2em] ${labelMuted}`}
+                >
+                  {tier.titleEn}
+                </p>
+              )}
             </section>
 
             <section
               data-card-block
-              className={`grid shrink-0 grid-cols-2 border-y ${rule} ${
-                isMinimal ? "gap-5 py-7" : "gap-5 py-5"
-              }`}
+              className={`grid shrink-0 grid-cols-2 ${
+                isVoid ? "" : `border-y ${rule}`
+              } ${isMinimal ? "gap-5 py-7" : isVoid ? "gap-4 py-3" : "gap-5 py-5"}`}
             >
               <div>
                 <p
@@ -599,16 +744,26 @@ export default function ResultCard({
               >
                 <p
                   data-export-metric
-                  className={`font-mono tracking-tight ${
-                    isMinimal ? "text-xl" : "text-2xl"
+                  className={`font-mono ${
+                    isVoid
+                      ? `tracking-widest text-zinc-200 drop-shadow-[0_0_8px_rgba(255,255,255,0.25)] ${isMinimal ? "text-xl" : "text-2xl"}`
+                      : `tracking-tight ${isMinimal ? "text-xl" : "text-2xl"}`
                   }`}
-                  style={{
-                    fontFamily: "var(--font-geist-mono), ui-monospace, monospace",
-                    color: tier.accent,
-                    textShadow: isApex
-                      ? `0 0 14px ${tier.accentSoft}`
-                      : undefined,
-                  }}
+                  style={
+                    isVoid
+                      ? {
+                          fontFamily:
+                            "var(--font-geist-mono), ui-monospace, monospace",
+                        }
+                      : {
+                          fontFamily:
+                            "var(--font-geist-mono), ui-monospace, monospace",
+                          color: tier.accent,
+                          textShadow: isApex
+                            ? `0 0 14px ${tier.accentSoft}`
+                            : undefined,
+                        }
+                  }
                 >
                   {tier.breathLabel}
                 </p>
@@ -616,7 +771,8 @@ export default function ResultCard({
                   <DiamondGauge
                     filled={tier.diamondFilled}
                     color={tier.accent}
-                    spectrumColors={tier.diamondColors}
+                    spectrumColors={isVoid ? null : tier.diamondColors}
+                    voidMode={isVoid}
                   />
                 ) : null}
               </div>
@@ -625,12 +781,14 @@ export default function ResultCard({
             {!isMinimal ? (
               <section
                 data-card-block
-                className={`min-h-0 shrink ${
+                className={`min-h-0 shrink overflow-hidden ${
                   isApex || isCritical
                     ? `rounded-lg border px-3 py-3 ${
                         isCritical
                           ? "border-red-900/50 bg-zinc-900/80"
-                          : "border-zinc-800 bg-zinc-900/60"
+                          : isVoid
+                            ? "border-zinc-700/50 bg-black/40"
+                            : "border-zinc-800 bg-zinc-900/60"
                       }`
                     : ""
                 }`}
@@ -641,7 +799,7 @@ export default function ResultCard({
                 >
                   {t.status}
                 </p>
-                <div className="mt-3 space-y-2">
+                <div className={isVoid ? "mt-2 space-y-1.5" : "mt-3 space-y-2"}>
                   <p
                     data-export-mono
                     className={`font-mono text-[11px] tracking-[0.08em] ${statusMono}`}
@@ -663,44 +821,60 @@ export default function ResultCard({
                 </div>
                 <p
                   data-export-body
-                  className={`mt-4 text-[12px] leading-5 ${diagnosisTone}`}
+                  className={`${isVoid ? "mt-2" : "mt-4"} text-[12px] leading-5 ${diagnosisTone}`}
                 >
                   {tier.diagnosis}
                 </p>
               </section>
             ) : null}
 
-            <footer
-              data-card-block
-              className={`flex shrink-0 items-end justify-between gap-3 border-t ${rule} ${
-                isMinimal ? "pt-5" : "pt-4"
-              }`}
-            >
-              <p
-                data-export-label
-                className={`min-w-0 text-[8px] tracking-[0.22em] ${labelMuted}`}
+            {isVoid ? <VoidHairline className="my-2" /> : null}
+
+            {isVoid ? (
+              <footer
+                data-card-block
+                className={`flex w-full shrink-0 items-end justify-between pl-2 pr-3 ${
+                  isMinimal ? "pt-5" : "pt-3"
+                }`}
               >
-                {PUBLIC_HOST}
-              </p>
-              <div className="flex shrink-0 flex-col items-end gap-1">
+                <span className="font-mono text-[9px] text-zinc-500">
+                  {PUBLIC_HOST}
+                </span>
+                <ArchitectSignature />
+              </footer>
+            ) : (
+              <footer
+                data-card-block
+                className={`flex shrink-0 items-end justify-between gap-3 border-t ${rule} ${
+                  isMinimal ? "pt-5" : "pt-4"
+                }`}
+              >
                 <p
-                  className={`whitespace-nowrap text-right text-[7px] leading-tight tracking-wide ${labelMuted}`}
+                  data-export-label
+                  className={`min-w-0 text-[8px] tracking-[0.22em] ${labelMuted}`}
                 >
-                  {t.qrHint}
+                  {PUBLIC_HOST}
                 </p>
-                <div className="h-12 w-12 shrink-0 overflow-hidden" data-export-qr>
-                  <QRCodeCanvas
-                    value={shareUrl}
-                    size={48}
-                    level="M"
-                    marginSize={1}
-                    bgColor="transparent"
-                    fgColor={isDarkCard ? "#ffffff" : "#0F1115"}
-                    className="block"
-                  />
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <p
+                    className={`whitespace-nowrap text-right text-[7px] leading-tight tracking-wide ${labelMuted}`}
+                  >
+                    {t.qrHint}
+                  </p>
+                  <div className="h-12 w-12 shrink-0 overflow-hidden" data-export-qr>
+                    <QRCodeCanvas
+                      value={shareUrl}
+                      size={48}
+                      level="M"
+                      marginSize={1}
+                      bgColor="transparent"
+                      fgColor={isDarkCard ? "#ffffff" : "#0F1115"}
+                      className="block"
+                    />
+                  </div>
                 </div>
-              </div>
-            </footer>
+              </footer>
+            )}
           </div>
         </div>
       </div>

@@ -14,7 +14,7 @@ export default function DevTierMockPanel({ onInject }: DevTierMockPanelProps) {
   return (
     <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-2">
       {open ? (
-        <div className="w-52 rounded-xl border border-white/15 bg-slate-950/95 p-3 shadow-xl backdrop-blur">
+        <div className="w-56 rounded-xl border border-white/15 bg-slate-950/95 p-3 shadow-xl backdrop-blur">
           <p className="mb-2 font-mono text-[9px] tracking-[0.2em] text-violet-300">
             DEV · TIER MOCK
           </p>
@@ -34,7 +34,7 @@ export default function DevTierMockPanel({ onInject }: DevTierMockPanelProps) {
             ))}
           </div>
           <p className="mt-2 font-mono text-[8px] leading-4 text-slate-500">
-            URL: ?mock=tier0 … tier4
+            URL: ?mock=tier00x / tier0-aurora
           </p>
         </div>
       ) : null}

@@ -12,10 +12,16 @@ import {
   type MockTierKey,
 } from "@/app/dev/mockTiers";
 import {
-  isTierZero,
+  isTier00XEligible,
+  isStandardTierZero,
   pickRandomApexVariant,
   type ApexVariant,
 } from "@/lib/calculateTier";
+import {
+  getDevTierFixture,
+  parseDevTier,
+  type DevTierOverride,
+} from "@/lib/devTierOverride";
 
 const IS_DEV = process.env.NODE_ENV === "development";
 
@@ -533,14 +539,17 @@ function Home() {
         const accuracyPct = Math.round(
           (nextResults.filter((item) => item.correct).length / STROOP_COUNT) * 100,
         );
-        const lockedVariant = isTierZero({
+        const gate = {
           latency: avgLatency,
           interference: interferenceMs,
           accuracy: accuracyPct,
           completedBreathingBeforeTest: completedBreathingBeforeTestRef.current,
-        })
-          ? pickRandomApexVariant()
-          : null;
+        };
+        const lockedVariant: ApexVariant | null = isTier00XEligible(gate)
+          ? "void"
+          : isStandardTierZero(gate)
+            ? pickRandomApexVariant()
+            : null;
 
         sessionStageRef.current = "summary";
         setApexVariant(lockedVariant);
@@ -688,7 +697,7 @@ function Home() {
       // Lock apex skin once at inject: explicit mock override, or 50/50 for bare tier0.
       const lockedVariant =
         payload.apexVariant ??
-        (key === "tier0" ? pickRandomApexVariant() : null);
+        (key === "tier0" || key === "tier00" ? pickRandomApexVariant() : null);
 
       setLatencies(nextLatencies);
       setLastLatency(nextLatencies[nextLatencies.length - 1] ?? null);
@@ -702,12 +711,47 @@ function Home() {
     [],
   );
 
+  // DEV ONLY - remove before launch
+  const injectDevTier = useCallback((key: DevTierOverride) => {
+    const payload = getDevTierFixture(key);
+    const { latencies: nextLatencies, stroopResults: nextStroop } =
+      buildMockTrialData(payload);
+
+    clearTimer(breathTimerRef);
+    clearTimer(tickTimerRef);
+    clearTimer(waitTimerRef);
+    runningRef.current = false;
+    setIsRunning(false);
+    setBreathStarted(false);
+
+    latenciesRef.current = nextLatencies;
+    stroopResultsRef.current = nextStroop;
+    sessionStageRef.current = "summary";
+    reactionPhaseRef.current = "ready";
+    stroopPhaseRef.current = "intro";
+
+    setLatencies(nextLatencies);
+    setLastLatency(nextLatencies[nextLatencies.length - 1] ?? null);
+    setStroopResults(nextStroop);
+    setCompletedBreathingBeforeTest(payload.completedBreathingBeforeTest);
+    setMockSessionId(payload.sessionId);
+    setApexVariant(payload.apexVariant);
+    setReportAt(new Date());
+    setSessionStage("summary");
+  }, []);
+
   useEffect(() => {
+    // DEV ONLY - remove before launch
+    const devKey = parseDevTier(searchParams.get("devTier"));
+    if (devKey) {
+      injectDevTier(devKey);
+      return;
+    }
     if (!IS_DEV) return;
     const key = parseMockTierKey(searchParams.get("mock"));
     if (!key) return;
     injectMockTier(key);
-  }, [injectMockTier, searchParams]);
+  }, [injectDevTier, injectMockTier, searchParams]);
 
   useEffect(() => {
     if (latencies.length !== REACTION_TRIALS) return;
