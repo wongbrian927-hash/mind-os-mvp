@@ -149,34 +149,15 @@ function VoidHairline({ className = "my-4" }: { className?: string }) {
 function ArchitectSignature() {
   return (
     <div className="flex flex-col items-end">
-      <svg
-        viewBox="0 0 140 44"
-        fill="none"
-        aria-hidden
-        className="h-9 w-32 text-zinc-200 opacity-90"
-      >
-        <path
-          d="M10 38 L10 6 C24 4 32 10 24 17 C18 21 10 20 10 20 C28 20 36 28 28 36 C22 41 10 40 10 38"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M34 34 Q35.2 32.2 36.4 34"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        />
-        <path
-          d="M44 36 C48 4 54 4 58 36 C62 4 70 4 74 36 C80 16 90 14 94 24 C97 32 94 37 88 36 C98 14 112 12 120 24 C126 34 122 42 112 42 C124 36 136 20 138 34"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-      <span className="mt-1 font-mono text-[8px] uppercase tracking-[0.22em] text-zinc-400">
+      <img
+        src="/signature-bwong.png"
+        alt=""
+        width={128}
+        height={72}
+        draggable={false}
+        className="h-9 w-auto select-none object-contain object-right opacity-90"
+      />
+      <span className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.25em] text-zinc-500">
         SYSTEM ARCHITECT
       </span>
     </div>
@@ -833,7 +814,7 @@ export default function ResultCard({
             {isVoid ? (
               <footer
                 data-card-block
-                className={`flex w-full shrink-0 items-end justify-between pl-2 pr-3 ${
+                className={`flex w-full shrink-0 items-end justify-between pl-2 pr-4 ${
                   isMinimal ? "pt-5" : "pt-3"
                 }`}
               >
