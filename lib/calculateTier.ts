@@ -152,14 +152,16 @@ export function isTier00XEligible(data: TierGateInput) {
   );
 }
 
+/** TIER 00 score bands only — breath gate lives in `isStandardTierZero`. */
+export function meetsTier00Metrics(
+  data: Pick<TierInput, "latency" | "interference" | "accuracy">,
+) {
+  return data.latency < 215 && data.interference < 25 && data.accuracy === 100;
+}
+
 /** Ordinary TIER 00 — aurora / midnight-sun, TOP 1%. */
 export function isStandardTierZero(data: TierGateInput) {
-  return (
-    data.latency < 215 &&
-    data.interference < 25 &&
-    data.accuracy === 100 &&
-    data.completedBreathingBeforeTest
-  );
+  return meetsTier00Metrics(data) && data.completedBreathingBeforeTest;
 }
 
 export function isTierZero(data: TierGateInput) {

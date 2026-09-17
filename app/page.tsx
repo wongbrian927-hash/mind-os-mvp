@@ -14,6 +14,7 @@ import {
 import {
   isTier00XEligible,
   isStandardTierZero,
+  meetsTier00Metrics,
   pickRandomApexVariant,
   type ApexVariant,
 } from "@/lib/calculateTier";
@@ -91,6 +92,8 @@ const COPY = {
     btnBlue: "🔵 藍色 (Blue)",
     word: { red: "紅", blue: "藍" } as Record<InkColor, string>,
     again: "再測一次",
+    tier00BreathHint:
+      "你嘅反應時間已達 TIER 00 水準，但 TIER 00 需要先完成 5-5 呼吸校準才作評定。\n下次先完成呼吸，再做測試。",
     disclaimer:
       "DISCLAIMER: MIND OS 提供之神經延遲及認知數據僅供個人量化追蹤參考，不構成任何臨床醫療診斷效力。若有持續性神經疲勞，請尋求專業醫療協助。",
   },
@@ -119,6 +122,8 @@ const COPY = {
     btnBlue: "🔵 Blue",
     word: { red: "RED", blue: "BLUE" } as Record<InkColor, string>,
     again: "Retry",
+    tier00BreathHint:
+      "Your reaction time reached TIER 00 level, but TIER 00 requires completing 5-5 calibration first.\nRun the breathing calibration before your next test.",
     disclaimer:
       "DISCLAIMER: Neural latency and cognitive load metrics provided by MIND OS are strictly for bio-quant tracking purposes and do not constitute clinical diagnosis. Seek medical assistance for chronic neural fatigue.",
   },
@@ -1075,6 +1080,22 @@ function Home() {
         </section>
         {sessionStage === "summary" ? (
           <div className="mx-auto mb-12 flex w-full max-w-md flex-col gap-2">
+            {avgSrt !== null &&
+            rawInterference !== null &&
+            acc !== null &&
+            meetsTier00Metrics({
+              latency: avgSrt,
+              interference: rawInterference,
+              accuracy: acc,
+            }) &&
+            !completedBreathingBeforeTest ? (
+              <p
+                data-export-hide
+                className="whitespace-pre-line text-center text-xs tracking-wide text-slate-500"
+              >
+                {t.tier00BreathHint}
+              </p>
+            ) : null}
             <button
               type="button"
               onClick={retrySession}
