@@ -60,6 +60,10 @@ const PHASE_MS: Record<BreathPhase, number> = {
   inhale: PHASE_DURATION_MS,
   exhale: PHASE_DURATION_MS,
 };
+/** Human-measured full-test duration label. Null = do not show. */
+const ESTIMATED_COMPLETION: string | null = null;
+const BREATH_OPTIONAL_SECONDS =
+  (TARGET_CYCLES * (PHASE_MS.inhale + PHASE_MS.exhale)) / 1000;
 
 const INK_HEX: Record<InkColor, string> = {
   red: "#f43f5e",
@@ -69,16 +73,23 @@ const INK_HEX: Record<InkColor, string> = {
 const COPY = {
   zh: {
     subtitle: "呼吸 · 專注 · 反應",
+    heroTitle: "測一測，你此刻的反應與專注表現",
+    heroBody: "透過反應速度與色彩干擾測試，看看你這次的作答表現。",
+    heroReward: "完成即可獲得個人數據卡與專屬 Tier 壁紙。",
+    heroComposition: (reactionTrials: number, stroopCount: number) =>
+      `${reactionTrials} 輪反應測試＋${stroopCount} 題色彩測試`,
+    startTest: "開始測試",
+    startBreath: "先做 30 秒呼吸",
+    breathOptionalNote: "呼吸練習可選，不影響開始測試。",
     breathTitle: "5-5 諧振呼吸",
+    breathDone: "呼吸校準已完成。準備好就可以開始測試。",
     phase: { inhale: "吸氣", exhale: "呼氣" } as Record<BreathPhase, string>,
     start: "開始",
     pause: "暫停",
-    round: (x: number) => `循環 ${x} / 3`,
-    breathSuggest: "建議先完成一次呼吸練習，以校準基準反應（非強制）",
+    resume: "繼續",
+    round: (x: number) => `循環 ${x} / ${TARGET_CYCLES}`,
     srtTitle: "第一階段 · 純反應測試",
     srtHint: "請在畫面變綠時立即按空白鍵 或 點擊此處 / Tap screen",
-    startTest: "開始認知測試",
-    startTestEn: "Start Cognitive Test",
     tooSoon: "太早喇，等變綠再撳或點擊",
     pressNow: "而家撳空白鍵或點擊此處",
     waitGreen: "等變綠，即刻撳空白鍵或點擊此處",
@@ -99,16 +110,25 @@ const COPY = {
   },
   en: {
     subtitle: "Breathe · Focus · React",
+    heroTitle: "Test your reaction and focus",
+    heroBody:
+      "Explore your performance with reaction-time and color-interference tasks.",
+    heroReward:
+      "Complete the test to get your personal result card and Tier wallpaper.",
+    heroComposition: (reactionTrials: number, stroopCount: number) =>
+      `${reactionTrials} reaction rounds + ${stroopCount} color trials`,
+    startTest: "Start test",
+    startBreath: "Breathe for 30 seconds",
+    breathOptionalNote: "Breathing is optional. You can start the test right away.",
     breathTitle: "5-5 Coherence Breath",
+    breathDone: "Breathing calibration complete. Start the test when ready.",
     phase: { inhale: "In", exhale: "Out" } as Record<BreathPhase, string>,
     start: "Start",
     pause: "Pause",
-    round: (x: number) => `Round ${x} / 3`,
-    breathSuggest: "Suggested: complete one breath practice first to calibrate baseline (optional)",
+    resume: "Resume",
+    round: (x: number) => `Round ${x} / ${TARGET_CYCLES}`,
     srtTitle: "Stage 1 · Simple Reaction",
     srtHint: "When green, press Space or tap here / Tap screen",
-    startTest: "Start Cognitive Test",
-    startTestEn: "Start Cognitive Test",
     tooSoon: "Too soon. Wait for green.",
     pressNow: "Press Space or tap now",
     waitGreen: "Wait for green, then press Space or tap",
@@ -201,27 +221,6 @@ function readScale(element: HTMLElement | null) {
   return Number.isFinite(sx) ? sx : MIN_SCALE;
 }
 
-/** Kept for rollback; gated by SHOW_LOCK (default false). */
-const SHOW_LOCK = false;
-
-function LockIcon() {
-  return (
-    <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 text-slate-500">
-      <svg
-        aria-hidden
-        viewBox="0 0 24 24"
-        className="h-5 w-5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-      >
-        <path d="M7 11V8a5 5 0 0 1 10 0v3" />
-        <rect x="5" y="11" width="14" height="10" rx="2" />
-      </svg>
-    </div>
-  );
-}
-
 export default function HomePage() {
   return (
     <Suspense fallback={<HomeFallback />}>
@@ -243,6 +242,7 @@ function Home() {
 
   const [isRunning, setIsRunning] = useState(false);
   const [breathStarted, setBreathStarted] = useState(false);
+  const [breathPanelOpen, setBreathPanelOpen] = useState(false);
   const [phase, setPhase] = useState<BreathPhase>("inhale");
   const [secondsLeft, setSecondsLeft] = useState(5);
   const [cycles, setCycles] = useState(0);
@@ -390,13 +390,27 @@ function Home() {
       setPhase("inhale");
       setScale(MIN_SCALE);
       setTransitionMs(0);
+      setCompletedBreathingBeforeTest(false);
     }
     runningRef.current = true;
     setIsRunning(true);
     setBreathStarted(true);
+    setBreathPanelOpen(true);
     window.setTimeout(() => {
       startBreathPhase(phaseRef.current, remainingRef.current);
     }, 30);
+  };
+
+  const openBreathPractice = () => {
+    setBreathPanelOpen(true);
+    if (!runningRef.current && cyclesRef.current < TARGET_CYCLES) {
+      startBreathing();
+    }
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById("breath-practice-panel")
+        ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
   };
 
   const pauseBreathing = () => {
@@ -453,6 +467,18 @@ function Home() {
   const startReactionTest = useCallback(() => {
     if (reactionPhaseRef.current !== "ready") return;
     if (sessionStageRef.current !== "srt") return;
+    // Pause breath timers before cognitive trials begin.
+    if (runningRef.current) {
+      const elapsed = performance.now() - phaseStartedAtRef.current;
+      remainingRef.current = Math.max(0, remainingRef.current - elapsed);
+      runningRef.current = false;
+      setIsRunning(false);
+      clearTimer(breathTimerRef);
+      clearTimer(tickTimerRef);
+      setTransitionMs(0);
+      setScale(readScale(orbRef.current));
+    }
+    setBreathPanelOpen(false);
     latenciesRef.current = [];
     setLatencies([]);
     setLastLatency(null);
@@ -656,6 +682,9 @@ function Home() {
 
   const retrySession = () => {
     clearTimer(waitTimerRef);
+    clearTimer(breathTimerRef);
+    clearTimer(tickTimerRef);
+    runningRef.current = false;
     latenciesRef.current = [];
     stroopResultsRef.current = [];
     stroopTrialsRef.current = [];
@@ -677,6 +706,9 @@ function Home() {
     setReportAt(null);
     setMockSessionId(null);
     setApexVariant(null);
+    setIsRunning(false);
+    setBreathStarted(false);
+    setBreathPanelOpen(false);
   };
 
   const injectMockTier = useCallback(
@@ -784,8 +816,10 @@ function Home() {
         )
       : null;
   const currentStroop = stroopTrials[stroopIndex];
-  const breathVisibleOnMobile =
-    sessionStage === "srt" && reactionPhase === "ready";
+  const isReadyHome = sessionStage === "srt" && reactionPhase === "ready";
+  const showBreathPanel = isReadyHome && breathPanelOpen;
+  const breathComplete =
+    completedBreathingBeforeTest && cycles >= TARGET_CYCLES;
 
   return (
     <div className="relative flex min-h-full flex-1 flex-col bg-[#0f172a] text-[#f8fafc]">
@@ -826,94 +860,149 @@ function Home() {
       </header>
 
       <main
-        className={`relative z-10 mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-4 px-4 pt-16 sm:gap-8 sm:px-10 sm:pt-10 ${
-          sessionStage === "summary" ||
-          (sessionStage === "srt" && reactionPhase === "ready")
+        className={`relative z-10 mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-4 px-4 pt-16 sm:gap-6 sm:px-10 sm:pt-10 ${
+          sessionStage === "summary" || isReadyHome
             ? "overflow-y-auto pb-10 sm:pb-12"
             : "overflow-hidden pb-6 sm:pb-10"
         }`}
       >
-        <section
-          className={`flex-col items-center justify-center rounded-3xl border border-white/5 bg-white/[0.03] px-4 py-5 text-center sm:px-6 sm:py-10 ${
-            breathVisibleOnMobile ? "flex" : "hidden sm:flex"
-          }`}
-        >
-          <p className="text-[11px] tracking-[0.35em] text-slate-400">{t.breathTitle}</p>
-
-          <div className="relative mx-auto mt-6 flex h-64 w-64 flex-col items-center justify-center overflow-visible sm:mt-10 sm:h-72 sm:w-72">
-            <div
-              ref={orbRef}
-              className="absolute inset-0 m-auto h-48 w-48 rounded-full will-change-transform"
-              style={{
-                transform: `scale(${scale})`,
-                transformOrigin: "center center",
-                transitionProperty: "transform",
-                transitionDuration: `${transitionMs}ms`,
-                transitionTimingFunction: "ease-in-out",
-                background:
-                  "radial-gradient(circle at 30% 30%, rgba(125,211,252,0.95), rgba(14,165,233,0.35) 58%, rgba(99,102,241,0.2) 100%)",
-                boxShadow: "0 0 80px rgba(56,189,248,0.28)",
-              }}
-            />
-            <div className="pointer-events-none relative z-10 flex flex-col items-center justify-center">
-              {breathStarted ? (
-                <>
-                  <span className="text-3xl font-bold tabular-nums tracking-tight text-[#f8fafc]">
-                    {secondsLeft}
-                  </span>
-                  <span className="mt-2 text-sm tracking-[0.28em] text-sky-200/80 opacity-80">
-                    {t.phase[phase]}
-                  </span>
-                </>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="mt-5 flex items-center justify-center gap-8 text-[11px] tracking-[0.2em] text-slate-500 sm:mt-8 sm:tracking-[0.28em]">
-            {(["inhale", "exhale"] as BreathPhase[]).map((item) => (
-              <span
-                key={item}
-                className={phase === item && breathStarted ? "text-sky-200" : "text-slate-600"}
+        {isReadyHome ? (
+          <section className="flex flex-col items-center rounded-3xl border border-white/5 bg-white/[0.03] px-4 py-7 text-center sm:px-8 sm:py-10">
+            <h1 className="max-w-xl text-balance text-2xl font-medium leading-snug tracking-wide text-[#f8fafc] sm:text-3xl sm:leading-snug">
+              {t.heroTitle}
+            </h1>
+            <p className="mt-4 max-w-md text-sm leading-6 tracking-wide text-slate-300 sm:text-base sm:leading-7">
+              {t.heroBody}
+            </p>
+            <p className="mt-3 max-w-md text-sm leading-6 tracking-wide text-sky-200/90 sm:text-[15px]">
+              {t.heroReward}
+            </p>
+            <p className="mt-4 font-mono text-[11px] tracking-wider text-slate-500">
+              {t.heroComposition(REACTION_TRIALS, STROOP_COUNT)}
+              {ESTIMATED_COMPLETION ? ` · ${ESTIMATED_COMPLETION}` : null}
+            </p>
+            <button
+              type="button"
+              onClick={startReactionTest}
+              className="mt-8 flex min-h-14 w-full max-w-sm items-center justify-center rounded-full bg-sky-300 px-8 py-4 text-sm font-semibold tracking-[0.18em] text-slate-900 shadow-[0_0_48px_rgba(125,211,252,0.35)] transition hover:bg-sky-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-200"
+            >
+              {t.startTest}
+            </button>
+            {!breathComplete ? (
+              <button
+                type="button"
+                onClick={openBreathPractice}
+                className="mt-3 flex min-h-12 w-full max-w-sm items-center justify-center rounded-full border border-white/15 bg-white/5 px-6 py-3 text-xs tracking-[0.2em] text-slate-200 transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
               >
-                {t.phase[item]} {PHASE_MS[item] / 1000}s
-              </span>
-            ))}
-          </div>
+                {t.startBreath}
+              </button>
+            ) : null}
+            <p className="mt-4 max-w-sm text-[11px] leading-5 tracking-wide text-slate-500">
+              {t.breathOptionalNote}
+            </p>
+          </section>
+        ) : null}
 
-          <div className="mt-5 flex items-center justify-center gap-3 sm:mt-8">
-            <button
-              type="button"
-              onClick={startBreathing}
-              disabled={isRunning}
-              className="h-11 min-w-[96px] rounded-full bg-sky-300 px-5 text-xs tracking-[0.28em] text-slate-900 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-40 sm:min-w-[120px] sm:px-6"
-            >
-              {lang === "en" ? "Start" : t.start}
-            </button>
-            <button
-              type="button"
-              onClick={pauseBreathing}
-              disabled={!isRunning}
-              className="h-11 min-w-[96px] rounded-full border border-white/15 bg-white/5 px-5 text-xs tracking-[0.28em] text-[#f8fafc] transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 sm:min-w-[120px] sm:px-6"
-            >
-              {lang === "en" ? "Pause" : t.pause}
-            </button>
-          </div>
+        {showBreathPanel ? (
+          <section
+            id="breath-practice-panel"
+            className="flex flex-col items-center justify-center rounded-3xl border border-white/5 bg-white/[0.03] px-4 py-5 text-center sm:px-6 sm:py-8"
+          >
+            <p className="text-[11px] tracking-[0.35em] text-slate-400">{t.breathTitle}</p>
+            {breathComplete ? (
+              <p className="mt-4 max-w-sm text-sm leading-6 text-sky-200">{t.breathDone}</p>
+            ) : null}
 
-          <div className="mt-5 flex items-center justify-center gap-3 sm:mt-8">
-            {Array.from({ length: TARGET_CYCLES }).map((_, index) => (
-              <span
-                key={index}
-                className={`h-1.5 w-8 rounded-full ${
-                  index < cycles ? "bg-sky-300" : "bg-white/10"
-                }`}
+            <div className="relative mx-auto mt-6 flex h-56 w-56 flex-col items-center justify-center overflow-visible sm:mt-8 sm:h-64 sm:w-64">
+              <div
+                ref={orbRef}
+                className="absolute inset-0 m-auto h-44 w-44 rounded-full will-change-transform sm:h-48 sm:w-48"
+                style={{
+                  transform: `scale(${scale})`,
+                  transformOrigin: "center center",
+                  transitionProperty: "transform",
+                  transitionDuration: `${transitionMs}ms`,
+                  transitionTimingFunction: "ease-in-out",
+                  background:
+                    "radial-gradient(circle at 30% 30%, rgba(125,211,252,0.95), rgba(14,165,233,0.35) 58%, rgba(99,102,241,0.2) 100%)",
+                  boxShadow: "0 0 80px rgba(56,189,248,0.28)",
+                }}
               />
-            ))}
-          </div>
-          <p className="mt-3 text-[11px] tracking-widest text-slate-500">
-            {t.round(Math.min(cycles, TARGET_CYCLES))}
-          </p>
-        </section>
+              <div className="pointer-events-none relative z-10 flex flex-col items-center justify-center">
+                {breathStarted ? (
+                  <>
+                    <span className="text-3xl font-bold tabular-nums tracking-tight text-[#f8fafc]">
+                      {secondsLeft}
+                    </span>
+                    <span className="mt-2 text-sm tracking-[0.28em] text-sky-200/80 opacity-80">
+                      {t.phase[phase]}
+                    </span>
+                  </>
+                ) : null}
+              </div>
+            </div>
 
+            <div className="mt-5 flex items-center justify-center gap-8 text-[11px] tracking-[0.2em] text-slate-500 sm:tracking-[0.28em]">
+              {(["inhale", "exhale"] as BreathPhase[]).map((item) => (
+                <span
+                  key={item}
+                  className={phase === item && breathStarted ? "text-sky-200" : "text-slate-600"}
+                >
+                  {t.phase[item]} {PHASE_MS[item] / 1000}s
+                </span>
+              ))}
+            </div>
+
+            {!breathComplete ? (
+              <div className="mt-5 flex items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={startBreathing}
+                  disabled={isRunning}
+                  className="h-11 min-w-[96px] rounded-full bg-sky-300 px-5 text-xs tracking-[0.28em] text-slate-900 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-40 sm:min-w-[120px] sm:px-6"
+                >
+                  {breathStarted || cycles > 0 ? t.resume : t.start}
+                </button>
+                <button
+                  type="button"
+                  onClick={pauseBreathing}
+                  disabled={!isRunning}
+                  className="h-11 min-w-[96px] rounded-full border border-white/15 bg-white/5 px-5 text-xs tracking-[0.28em] text-[#f8fafc] transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 sm:min-w-[120px] sm:px-6"
+                >
+                  {t.pause}
+                </button>
+              </div>
+            ) : null}
+
+            <div className="mt-5 flex items-center justify-center gap-3">
+              {Array.from({ length: TARGET_CYCLES }).map((_, index) => (
+                <span
+                  key={index}
+                  className={`h-1.5 w-8 rounded-full ${
+                    index < cycles ? "bg-sky-300" : "bg-white/10"
+                  }`}
+                />
+              ))}
+            </div>
+            <p className="mt-3 text-[11px] tracking-widest text-slate-500">
+              {t.round(Math.min(cycles, TARGET_CYCLES))}
+            </p>
+            {breathComplete ? (
+              <button
+                type="button"
+                onClick={startReactionTest}
+                className="mt-6 flex min-h-14 w-full max-w-sm items-center justify-center rounded-full bg-sky-300 px-8 py-4 text-sm font-semibold tracking-[0.18em] text-slate-900 shadow-[0_0_48px_rgba(125,211,252,0.35)] transition hover:bg-sky-200"
+              >
+                {t.startTest}
+              </button>
+            ) : null}
+            <p className="mt-3 text-[10px] tracking-wide text-slate-600">
+              {BREATH_OPTIONAL_SECONDS}s · 5+5 × {TARGET_CYCLES}
+            </p>
+          </section>
+        ) : null}
+
+        {!isReadyHome ? (
         <section
           className={`flex min-h-0 flex-1 flex-col items-center justify-center text-center ${
             sessionStage === "summary"
@@ -921,32 +1010,7 @@ function Home() {
               : "rounded-3xl border border-white/5 bg-white/[0.03] px-4 py-5 sm:min-h-[28rem] sm:flex-none sm:px-6 sm:py-10"
           }`}
         >
-          {sessionStage === "srt" && reactionPhase === "ready" ? (
-            <div className="flex flex-col items-center justify-center">
-              {SHOW_LOCK ? <LockIcon /> : null}
-              <p className="max-w-sm text-xs leading-5 text-zinc-400">
-                {t.breathSuggest}
-              </p>
-              <p className="mt-5 text-[11px] tracking-[0.35em] text-slate-400">
-                {t.srtTitle}
-              </p>
-              <button
-                type="button"
-                onClick={startReactionTest}
-                disabled={false}
-                className="mt-8 min-h-16 rounded-full bg-sky-300 px-10 py-4 text-slate-900 shadow-[0_0_48px_rgba(125,211,252,0.35)] transition hover:bg-sky-200"
-              >
-                <span className="block text-sm font-semibold tracking-[0.18em]">
-                  {t.startTest}
-                </span>
-                {lang === "zh" ? (
-                  <span className="mt-1 block text-[11px] tracking-[0.16em] text-slate-700">
-                    {t.startTestEn}
-                  </span>
-                ) : null}
-              </button>
-            </div>
-          ) : sessionStage === "srt" && reactionPhase === "buffer" ? (
+          {sessionStage === "srt" && reactionPhase === "buffer" ? (
             <div className="flex flex-col items-center justify-center">
               <p className="text-[11px] tracking-[0.35em] text-slate-400">{t.srtTitle}</p>
               <p className="mt-5 max-w-md text-base font-medium leading-7 tracking-wide text-sky-200">
@@ -1078,6 +1142,7 @@ function Home() {
             />
           ) : null}
         </section>
+        ) : null}
         {sessionStage === "summary" ? (
           <div className="mx-auto mb-12 flex w-full max-w-md flex-col gap-2">
             {avgSrt !== null &&

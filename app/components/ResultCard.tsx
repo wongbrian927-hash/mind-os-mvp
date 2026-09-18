@@ -43,6 +43,13 @@ const COPY = {
     saved: "已儲存",
     detailed: "詳細",
     minimal: "簡約",
+    metricsHelp: "指標說明",
+    metricsReaction:
+      "反應時間：本次反應測試所有有效試次延遲的中位數（毫秒）。",
+    metricsInterference:
+      "干擾損耗：不一致試次平均延遲減去一致試次平均延遲（毫秒）。顯示時若差值 ≤ 0，以 0 表示。",
+    metricsAccuracy:
+      "準確率：色彩測試答對題數 ÷ 總題數，四捨五入至整數百分比。",
     reaction: "REACTION LATENCY",
     tier: "FOCUS TIER",
     interference: "INTERFERENCE LOSS",
@@ -57,8 +64,15 @@ const COPY = {
     save: "Save Image",
     saving: "Rendering…",
     saved: "Saved",
-    detailed: "Clinical",
+    detailed: "Detailed",
     minimal: "Minimal",
+    metricsHelp: "Metric notes",
+    metricsReaction:
+      "Reaction time: median latency across all valid reaction trials (ms).",
+    metricsInterference:
+      "Interference loss: mean incongruent latency minus mean congruent latency (ms). Values ≤ 0 display as 0.",
+    metricsAccuracy:
+      "Accuracy: correct color-trial responses ÷ total color trials, rounded to a whole-number percent.",
     reaction: "REACTION LATENCY",
     tier: "FOCUS TIER",
     interference: "INTERFERENCE LOSS",
@@ -265,6 +279,7 @@ export default function ResultCard({
   const [toast, setToast] = useState<string | null>(null);
   const [qrReady, setQrReady] = useState(false);
   const [showWallpaperModal, setShowWallpaperModal] = useState(false);
+  const [metricsOpen, setMetricsOpen] = useState(false);
 
   const t = COPY[lang];
   const tier = useMemo(
@@ -888,6 +903,23 @@ export default function ResultCard({
       >
         {wallpaperCopy.btn}
       </button>
+      <div data-export-hide className="w-full">
+        <button
+          type="button"
+          onClick={() => setMetricsOpen((value) => !value)}
+          className="w-full text-center font-mono text-[10px] tracking-[0.18em] text-slate-500 transition hover:text-slate-300"
+          aria-expanded={metricsOpen}
+        >
+          {metricsOpen ? `▾ ${t.metricsHelp}` : `▸ ${t.metricsHelp}`}
+        </button>
+        {metricsOpen ? (
+          <div className="mt-2 space-y-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-3 text-left text-[11px] leading-5 tracking-wide text-slate-400">
+            <p>{t.metricsReaction}</p>
+            <p>{t.metricsInterference}</p>
+            <p>{t.metricsAccuracy}</p>
+          </div>
+        ) : null}
+      </div>
       {toast ? (
         <p className="text-center text-xs tracking-wide text-slate-500">{toast}</p>
       ) : null}
