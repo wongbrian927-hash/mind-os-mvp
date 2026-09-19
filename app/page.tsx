@@ -60,8 +60,6 @@ const PHASE_MS: Record<BreathPhase, number> = {
   inhale: PHASE_DURATION_MS,
   exhale: PHASE_DURATION_MS,
 };
-/** Human-measured full-test duration label. Null = do not show. */
-const ESTIMATED_COMPLETION: string | null = null;
 const BREATH_OPTIONAL_SECONDS =
   (TARGET_CYCLES * (PHASE_MS.inhale + PHASE_MS.exhale)) / 1000;
 
@@ -73,14 +71,11 @@ const INK_HEX: Record<InkColor, string> = {
 const COPY = {
   zh: {
     subtitle: "呼吸 · 專注 · 反應",
-    heroTitle: "測一測，你此刻的反應與專注表現",
-    heroBody: "透過反應速度與色彩干擾測試，看看你這次的作答表現。",
-    heroReward: "完成即可獲得個人數據卡與專屬 Tier 壁紙。",
-    heroComposition: (reactionTrials: number, stroopCount: number) =>
-      `${reactionTrials} 輪反應測試＋${stroopCount} 題色彩測試`,
+    heroTitle: "測試你此刻的反應與專注",
+    heroSubtitle: "約 1 分鐘完成，取得個人數據與專屬 Tier。",
     startTest: "開始測試",
     startBreath: "先做 30 秒呼吸",
-    breathOptionalNote: "呼吸練習可選，不影響開始測試。",
+    breathOptionalNote: "呼吸練習可選",
     breathTitle: "5-5 諧振呼吸",
     breathDone: "呼吸校準已完成。準備好就可以開始測試。",
     phase: { inhale: "吸氣", exhale: "呼氣" } as Record<BreathPhase, string>,
@@ -111,15 +106,10 @@ const COPY = {
   en: {
     subtitle: "Breathe · Focus · React",
     heroTitle: "Test your reaction and focus",
-    heroBody:
-      "Explore your performance with reaction-time and color-interference tasks.",
-    heroReward:
-      "Complete the test to get your personal result card and Tier wallpaper.",
-    heroComposition: (reactionTrials: number, stroopCount: number) =>
-      `${reactionTrials} reaction rounds + ${stroopCount} color trials`,
+    heroSubtitle: "About 1 minute. Get your personal data and exclusive Tier.",
     startTest: "Start test",
     startBreath: "Breathe for 30 seconds",
-    breathOptionalNote: "Breathing is optional. You can start the test right away.",
+    breathOptionalNote: "Breathing is optional",
     breathTitle: "5-5 Coherence Breath",
     breathDone: "Breathing calibration complete. Start the test when ready.",
     phase: { inhale: "In", exhale: "Out" } as Record<BreathPhase, string>,
@@ -874,20 +864,13 @@ function Home() {
             <h1 className="max-w-xl text-balance text-2xl font-medium leading-snug tracking-wide text-[#f8fafc] sm:text-3xl sm:leading-snug">
               {t.heroTitle}
             </h1>
-            <p className="mt-4 max-w-md text-sm leading-6 tracking-wide text-slate-300 sm:text-base sm:leading-7">
-              {t.heroBody}
-            </p>
-            <p className="mt-3 max-w-md text-sm leading-6 tracking-wide text-sky-200/90 sm:text-[15px]">
-              {t.heroReward}
-            </p>
-            <p className="mt-4 font-mono text-[11px] tracking-wider text-slate-500">
-              {t.heroComposition(REACTION_TRIALS, STROOP_COUNT)}
-              {ESTIMATED_COMPLETION ? ` · ${ESTIMATED_COMPLETION}` : null}
+            <p className="mt-6 max-w-md text-sm leading-6 tracking-wide text-slate-300 sm:text-base sm:leading-7">
+              {t.heroSubtitle}
             </p>
             <button
               type="button"
               onClick={startReactionTest}
-              className="mt-8 flex min-h-14 w-full max-w-sm items-center justify-center rounded-full bg-sky-300 px-8 py-4 text-sm font-semibold tracking-[0.18em] text-slate-900 shadow-[0_0_48px_rgba(125,211,252,0.35)] transition hover:bg-sky-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-200"
+              className="mt-10 flex min-h-14 w-full max-w-sm items-center justify-center rounded-full bg-sky-300 px-8 py-4 text-sm font-semibold tracking-[0.18em] text-slate-900 shadow-[0_0_48px_rgba(125,211,252,0.35)] transition hover:bg-sky-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-200"
             >
               {t.startTest}
             </button>
