@@ -830,6 +830,22 @@ export default function ResultCard({
                 >
                   {tier.diagnosis}
                 </p>
+                {tier.diagnosisSupport ? (
+                  <p
+                    data-export-body
+                    className={`mt-2 text-[11px] leading-5 ${diagnosisTone} opacity-80`}
+                  >
+                    {tier.diagnosisSupport}
+                  </p>
+                ) : null}
+                {tier.sessionNote ? (
+                  <p
+                    data-export-body
+                    className={`mt-2 font-mono text-[9px] tracking-[0.12em] ${labelMuted}`}
+                  >
+                    {tier.sessionNote}
+                  </p>
+                ) : null}
               </section>
             ) : null}
 

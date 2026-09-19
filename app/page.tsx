@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import BrandHeader from "@/app/components/BrandHeader";
+import HomeRewardPreview from "@/app/components/HomeRewardPreview";
 import ResultCard from "@/app/components/ResultCard";
 import DevTierMockPanel from "@/app/components/DevTierMockPanel";
 import {
@@ -12,6 +13,7 @@ import {
   type MockTierKey,
 } from "@/app/dev/mockTiers";
 import {
+  isAbnormalSession,
   isTier00XEligible,
   isStandardTierZero,
   meetsTier00Metrics,
@@ -82,6 +84,7 @@ const COPY = {
     subtitle: "呼吸 · 專注 · 反應",
     heroTitle: "測試你此刻的反應與專注",
     heroSubtitle: "約 1 分鐘完成，取得個人數據與專屬 Tier。",
+    rewardTeaser: "完成後解鎖你的 Tier 與專屬視覺",
     startTest: "開始測試",
     startBreath: "先做 30 秒呼吸",
     breathOptionalNote: "呼吸練習可選",
@@ -116,15 +119,19 @@ const COPY = {
     btnBlue: "藍",
     word: { red: "紅", blue: "藍" } as Record<InkColor, string>,
     again: "再測一次",
+    abnormalTitle: "這次測試可能受到中斷或延遲影響。",
+    abnormalRetry: "重新測試",
+    abnormalView: "仍然查看結果",
     tier00BreathHint:
       "你嘅反應時間已達 TIER 00 水準，但 TIER 00 需要先完成 5-5 呼吸校準才作評定。\n下次先完成呼吸，再做測試。",
     disclaimer:
-      "DISCLAIMER: MIND OS 提供之神經延遲及認知數據僅供個人量化追蹤參考，不構成任何臨床醫療診斷效力。若有持續性神經疲勞，請尋求專業醫療協助。",
+      "MIND OS 結果僅反映今次作答表現，供個人參考，不構成任何醫療或臨床診斷。",
   },
   en: {
     subtitle: "Breathe · Focus · React",
     heroTitle: "Test your reaction and focus",
     heroSubtitle: "About 1 minute. Get your personal data and exclusive Tier.",
+    rewardTeaser: "Finish to unlock your Tier and exclusive visuals",
     startTest: "Start test",
     startBreath: "Breathe for 30 seconds",
     breathOptionalNote: "Breathing is optional",
@@ -157,10 +164,13 @@ const COPY = {
     btnBlue: "Blue",
     word: { red: "RED", blue: "BLUE" } as Record<InkColor, string>,
     again: "Retry",
+    abnormalTitle: "This run may have been interrupted or delayed.",
+    abnormalRetry: "Retake test",
+    abnormalView: "View results anyway",
     tier00BreathHint:
       "Your reaction time reached TIER 00 level, but TIER 00 requires completing 5-5 calibration first.\nRun the breathing calibration before your next test.",
     disclaimer:
-      "DISCLAIMER: Neural latency and cognitive load metrics provided by MIND OS are strictly for bio-quant tracking purposes and do not constitute clinical diagnosis. Seek medical assistance for chronic neural fatigue.",
+      "MIND OS results reflect this run only for personal reference, and do not constitute medical or clinical diagnosis.",
   },
 } as const;
 
@@ -280,6 +290,8 @@ function Home() {
   const [mockSessionId, setMockSessionId] = useState<string | null>(null);
   /** Locked at result generation — never re-roll on re-render / save / share. */
   const [apexVariant, setApexVariant] = useState<ApexVariant | null>(null);
+  const [resultSuspect, setResultSuspect] = useState(false);
+  const [forceShowResult, setForceShowResult] = useState(false);
 
   const orbRef = useRef<HTMLDivElement>(null);
   const phaseRef = useRef<BreathPhase>("inhale");
@@ -302,6 +314,7 @@ function Home() {
   const stroopResultsRef = useRef<StroopResult[]>([]);
   const stroopShownAtRef = useRef<number | null>(null);
   const stroopLockedRef = useRef(false);
+  const sessionInterruptedRef = useRef(false);
 
   const startReactionTestRef = useRef<() => void>(() => {});
   const handleReactionRef = useRef<() => void>(() => {});
@@ -526,6 +539,9 @@ function Home() {
     latenciesRef.current = [];
     setLatencies([]);
     setLastLatency(null);
+    sessionInterruptedRef.current = false;
+    setResultSuspect(false);
+    setForceShowResult(false);
     reactionPhaseRef.current = "instruction";
     setReactionPhase("instruction");
   }, []);
@@ -653,8 +669,16 @@ function Home() {
             ? pickRandomApexVariant()
             : null;
 
+        const suspect = isAbnormalSession({
+          latencies: latenciesRef.current,
+          stroopLatencies: nextResults.map((item) => item.latencyMs),
+          interrupted: sessionInterruptedRef.current,
+        });
+
         sessionStageRef.current = "summary";
         setApexVariant(lockedVariant);
+        setResultSuspect(suspect);
+        setForceShowResult(false);
         setReportAt(new Date());
         setSessionStage("summary");
         return;
@@ -712,6 +736,33 @@ function Home() {
   }, []);
 
   useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState !== "hidden") return;
+      const stage = sessionStageRef.current;
+      if (stage === "srt") {
+        const phase = reactionPhaseRef.current;
+        if (
+          phase === "waiting" ||
+          phase === "go" ||
+          phase === "countdown" ||
+          phase === "recorded"
+        ) {
+          sessionInterruptedRef.current = true;
+        }
+        return;
+      }
+      if (stage === "stroop") {
+        const phase = stroopPhaseRef.current;
+        if (phase === "stimulus" || phase === "gap" || phase === "countdown") {
+          sessionInterruptedRef.current = true;
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
+
+  useEffect(() => {
     return () => {
       clearTimer(breathTimerRef);
       clearTimer(tickTimerRef);
@@ -729,6 +780,7 @@ function Home() {
     latenciesRef.current = [];
     stroopResultsRef.current = [];
     stroopTrialsRef.current = [];
+    sessionInterruptedRef.current = false;
     sessionStageRef.current = "srt";
     reactionPhaseRef.current = "ready";
     stroopPhaseRef.current = "instruction";
@@ -747,6 +799,8 @@ function Home() {
     setReportAt(null);
     setMockSessionId(null);
     setApexVariant(null);
+    setResultSuspect(false);
+    setForceShowResult(false);
     setIsRunning(false);
     setBreathStarted(false);
     setBreathPanelOpen(false);
@@ -798,6 +852,9 @@ function Home() {
       setApexVariant(lockedVariant);
       setReportAt(new Date());
       setSessionStage("summary");
+      setResultSuspect(false);
+      setForceShowResult(false);
+      sessionInterruptedRef.current = false;
     },
     [],
   );
@@ -829,6 +886,9 @@ function Home() {
     setApexVariant(payload.apexVariant);
     setReportAt(new Date());
     setSessionStage("summary");
+    setResultSuspect(false);
+    setForceShowResult(false);
+    sessionInterruptedRef.current = false;
   }, []);
 
   useEffect(() => {
@@ -915,13 +975,13 @@ function Home() {
             <h1 className="max-w-xl text-balance text-2xl font-medium leading-snug tracking-wide text-[#f8fafc] sm:text-3xl sm:leading-snug">
               {t.heroTitle}
             </h1>
-            <p className="mt-6 max-w-md text-sm leading-6 tracking-wide text-slate-300 sm:text-base sm:leading-7">
+            <p className="mt-5 max-w-md text-sm leading-6 tracking-wide text-slate-300 sm:mt-6 sm:text-base sm:leading-7">
               {t.heroSubtitle}
             </p>
             <button
               type="button"
               onClick={startReactionTest}
-              className="mt-10 flex min-h-14 w-full max-w-sm items-center justify-center rounded-full bg-sky-300 px-8 py-4 text-sm font-semibold tracking-[0.18em] text-slate-900 shadow-[0_0_48px_rgba(125,211,252,0.35)] transition hover:bg-sky-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-200"
+              className="mt-8 flex min-h-14 w-full max-w-sm items-center justify-center rounded-full bg-sky-300 px-8 py-4 text-sm font-semibold tracking-[0.18em] text-slate-900 shadow-[0_0_48px_rgba(125,211,252,0.35)] transition hover:bg-sky-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-200 sm:mt-10"
             >
               {t.startTest}
             </button>
@@ -937,6 +997,9 @@ function Home() {
             <p className="mt-4 max-w-sm text-[11px] leading-5 tracking-wide text-slate-500">
               {t.breathOptionalNote}
             </p>
+            <div className="mt-7 w-full sm:mt-9">
+              <HomeRewardPreview caption={t.rewardTeaser} />
+            </div>
           </section>
         ) : null}
 
@@ -1225,6 +1288,34 @@ function Home() {
           ) : avgSrt !== null &&
             rawInterference !== null &&
             acc !== null &&
+            reportAt &&
+            resultSuspect &&
+            !forceShowResult ? (
+            <div className="flex w-full max-w-md flex-col items-center px-2 text-center">
+              <p className="text-[11px] tracking-[0.35em] text-slate-400">
+                MIND OS
+              </p>
+              <p className="mt-6 text-balance text-lg font-medium leading-relaxed tracking-wide text-[#f8fafc] sm:text-xl">
+                {t.abnormalTitle}
+              </p>
+              <button
+                type="button"
+                onClick={retrySession}
+                className="mt-10 flex min-h-14 w-full items-center justify-center rounded-full bg-sky-300 px-8 py-4 text-sm font-semibold tracking-[0.18em] text-slate-900 shadow-[0_0_48px_rgba(125,211,252,0.35)] transition hover:bg-sky-200"
+              >
+                {t.abnormalRetry}
+              </button>
+              <button
+                type="button"
+                onClick={() => setForceShowResult(true)}
+                className="mt-3 flex min-h-12 w-full items-center justify-center rounded-full border border-white/15 bg-white/5 px-6 py-3 text-xs tracking-[0.2em] text-slate-300 transition hover:bg-white/10"
+              >
+                {t.abnormalView}
+              </button>
+            </div>
+          ) : avgSrt !== null &&
+            rawInterference !== null &&
+            acc !== null &&
             reportAt ? (
             <ResultCard
               lang={lang}
@@ -1239,7 +1330,7 @@ function Home() {
           ) : null}
         </section>
         ) : null}
-        {sessionStage === "summary" ? (
+        {sessionStage === "summary" && !(resultSuspect && !forceShowResult) ? (
           <div className="mx-auto mb-12 flex w-full max-w-md flex-col gap-2">
             {avgSrt !== null &&
             rawInterference !== null &&

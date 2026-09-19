@@ -13,7 +13,7 @@ type WallpaperCopy = {
 
 export const WALLPAPER_I18N = {
   zh: {
-    btn: "[ 解鎖高清神經校準壁紙 ]",
+    btn: "[ 解鎖高清專屬壁紙 ]",
     tabTier: "專屬 Tier 流體",
     tabBase: "基準校準門 Base",
     mobileTip: "長按圖片即可「加入相片」儲存高清桌布",
@@ -21,11 +21,11 @@ export const WALLPAPER_I18N = {
     close: "關閉",
     basePortal: {
       title: "NEURAL BASE · PORTAL (高清)",
-      desc: "Mind OS 基準神經校準入口。重置前額葉負載，回歸絕對安靜。",
+      desc: "Mind OS 基準校準入口。重置系統負載，回歸安靜。",
     },
   },
   en: {
-    btn: "[ UNLOCK NEURAL CALIBRATION ARTIFACT ]",
+    btn: "[ UNLOCK HD EXCLUSIVE ARTIFACT ]",
     tabTier: "TIER EXCLUSIVE",
     tabBase: "BASE PORTAL",
     mobileTip: "Long-press image to save HD artifact to photos",
@@ -33,7 +33,7 @@ export const WALLPAPER_I18N = {
     close: "CLOSE",
     basePortal: {
       title: "NEURAL BASE · PORTAL (HD)",
-      desc: "Mind OS baseline calibration gateway. Reset prefrontal load to absolute quiet.",
+      desc: "Mind OS baseline calibration gateway. Reset system load to quiet.",
     },
   },
 } as const;
@@ -50,40 +50,40 @@ export const TIER_WALLPAPERS: Record<
     src: "/wallpapers/tier00x.png",
     zh: {
       title: "ARTIFACT 00X · WHITE VOID (高清)",
-      desc: "神經訊號已抽乾色相，進入單色鈦金屬態。僅限突破生理極限之架構師持有。",
+      desc: "今次 run 的單色峰值態視覺。Signal 極乾淨，僅限罕見同步表現解鎖。",
     },
     en: {
       title: "ARTIFACT 00X · WHITE VOID (HD)",
-      desc: "Neural signal drained of chroma — monochrome titanium state. Held only by architects who breach the physiological limit.",
+      desc: "Monochrome peak-state visual from this run. Clean signal — unlocked only by rare sync.",
     },
   },
   tier00: {
     src: "/wallpapers/tier00_aurora.png",
     zh: {
       title: "TIER 00 · AURORA APEX (高清)",
-      desc: "雙頻神經超頻狀態，前額葉干擾損耗歸零，進入純淨紫綠極光流。",
+      desc: "雙頻超頻同步態。干擾損耗趨近於零，進入純淨紫綠極光流。",
     },
     en: {
       title: "TIER 00 · AURORA APEX (HD)",
-      desc: "Dual-band neural overclock. Prefrontal interference loss at zero — pure violet-green aurora flow.",
+      desc: "Dual-band overclock sync. Interference loss near zero — pure violet-green aurora flow.",
     },
   },
   tier00_solar: {
     src: "/wallpapers/tier00_solar.png",
     zh: {
       title: "TIER 00 · SOLAR FLARE (高清)",
-      desc: "絕對聚焦高能態，神經脈衝處於最高放電閾值。",
+      desc: "絕對聚焦高能態，系統處於峰值放電節奏。",
     },
     en: {
       title: "TIER 00 · SOLAR FLARE (HD)",
-      desc: "Absolute-focus high-energy state. Neural pulse at peak discharge threshold.",
+      desc: "Absolute-focus high-energy state. System at peak discharge rhythm.",
     },
   },
   tier01: {
     src: "/wallpapers/tier01.png",
     zh: {
       title: "TIER 01 · CRYO OCEAN (高清)",
-      desc: "深層冷卻低延遲心流，訊號傳導順暢無阻。",
+      desc: "深層冷卻低延遲流體，訊號傳導順暢無阻。",
     },
     en: {
       title: "TIER 01 · CRYO OCEAN (HD)",
@@ -94,33 +94,33 @@ export const TIER_WALLPAPERS: Record<
     src: "/wallpapers/tier02.png",
     zh: {
       title: "TIER 02 · NEURAL SILK (高清)",
-      desc: "自主神經協調態，筋膜張力平衡，呈現翡翠與柔粉交融流動。",
+      desc: "系統協調態，張力平衡，呈現翡翠與柔粉交融流動。",
     },
     en: {
       title: "TIER 02 · NEURAL SILK (HD)",
-      desc: "Autonomic coherence. Fascial tension balanced — jade and blush silk in motion.",
+      desc: "System coherence. Tension balanced — jade and blush silk in motion.",
     },
   },
   tier03: {
     src: "/wallpapers/tier03.png",
     zh: {
       title: "TIER 03 · AMBER FLUID (高清)",
-      desc: "前額葉正常運算負載，琥珀色常態神經活動流體。",
+      desc: "今次負載偏高的琥珀色流體視覺。",
     },
     en: {
       title: "TIER 03 · AMBER FLUID (HD)",
-      desc: "Prefrontal load in the normal band. Amber baseline neural fluid.",
+      desc: "Amber fluid visual for an elevated-load run.",
     },
   },
   tier04: {
     src: "/wallpapers/tier04.png",
     zh: {
       title: "TIER 04 · CRIMSON IMPULSE (高清)",
-      desc: "前額葉認知超載警示，高阻抗脈衝流動。",
+      desc: "今次延遲偏高的赤紅脈衝流體。可以再測一次。",
     },
     en: {
       title: "TIER 04 · CRIMSON IMPULSE (HD)",
-      desc: "Prefrontal overload alert. High-impedance impulse flow.",
+      desc: "Crimson impulse fluid for a high-latency run. Try another pass anytime.",
     },
   },
 };

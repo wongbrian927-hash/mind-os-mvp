@@ -31,6 +31,10 @@ export type TierConfig = {
   statusPrimary: string;
   statusSecondary: string;
   diagnosis: string;
+  /** Optional supporting line under diagnosis (retest hint, etc.). */
+  diagnosisSupport: string | null;
+  /** Soft footer note: single-run framing. */
+  sessionNote: string | null;
   interferenceLabel: string;
   breathLabel: string;
   isApex: boolean;
@@ -197,12 +201,24 @@ function emptyApexFields() {
   };
 }
 
-/** Map Latency + Interference + Accuracy (+ breath calibration) → linked visual / clinical state. */
+const SESSION_NOTE = {
+  zh: "單次結果只反映今次作答表現。",
+  en: "This result reflects this run only.",
+} as const;
+
+const RETEST_SUPPORT = {
+  zh: "如果測試期間有分心、中斷或裝置延遲，可以再測一次。",
+  en: "If you were distracted, interrupted, or hit device lag, try another run.",
+} as const;
+
+/** Map Latency + Interference + Accuracy (+ breath calibration) → linked visual / system state. */
 export function getTierConfig(data: TierInput): TierConfig {
   const { interference, lang, completedBreathingBeforeTest, apexVariant } = data;
   const isZh = lang === "zh";
   const level = calculateTierLevel(data);
   const diamondFilled = (5 - level) as 1 | 2 | 3 | 4 | 5;
+  const sessionNote = isZh ? SESSION_NOTE.zh : SESSION_NOTE.en;
+  const retestSupport = isZh ? RETEST_SUPPORT.zh : RETEST_SUPPORT.en;
 
   if (apexVariant === "void" || (isTier00XEligible(data) && apexVariant !== "aurora" && apexVariant !== "midnight-sun")) {
     return {
@@ -221,8 +237,10 @@ export function getTierConfig(data: TierInput): TierConfig {
       statusPrimary: "Trapezius: Deep Released",
       statusSecondary: "Focus Index: Titanium Purity",
       diagnosis: isZh
-        ? "神經訊號已抽乾色相，進入單色鈦金屬態。傳導阻抗趨近真空。"
-        : "Neural signal drained of chroma — monochrome titanium state. Conduction impedance approaches vacuum.",
+        ? "今次 run 進入罕見的單色峰值態。Signal 極乾淨，干擾趨近於零。"
+        : "This run hit a rare monochrome peak. Signal is clean — interference near zero.",
+      diagnosisSupport: null,
+      sessionNote,
       interferenceLabel: "Zero Interference",
       breathLabel: "VOID LOCK",
       isApex: true,
@@ -248,14 +266,16 @@ export function getTierConfig(data: TierInput): TierConfig {
       cardBorder: preset.cardBorder,
       cardBackground: preset.cardBackground,
       progress: 1,
-      title: isZh ? "神經超頻" : "Neural Overclock",
+      title: isZh ? "系統超頻" : "System Overclock",
       titleEn: "TIER 00",
       percentLabel: preset.percentLabel,
       statusPrimary: "Trapezius: Deep Released",
       statusSecondary: "Focus Index: Top 1%",
       diagnosis: isZh
-        ? "神經傳導閾值達到生理極限，前額葉抑制損耗趨近於零，處於極致心流與自主神經高度協調狀態。"
-        : "Neural conduction is at the physiological limit. Prefrontal inhibitory loss approaches zero — peak flow with high autonomic coherence.",
+        ? "今次 reaction engine 完全對齊，干擾損耗趨近於零。系統處於極佳同步。"
+        : "This run’s reaction engine locked in sync. Interference loss near zero — peak alignment.",
+      diagnosisSupport: null,
+      sessionNote,
       interferenceLabel: "Zero Interference",
       breathLabel: preset.breathLabel,
       isApex: true,
@@ -278,14 +298,16 @@ export function getTierConfig(data: TierInput): TierConfig {
       cardBorder: "rgba(24, 24, 27, 0.1)",
       cardBackground: "#F8F9FA",
       progress: 0.92,
-      title: isZh ? "超感神經" : "Hyper-Neural",
+      title: isZh ? "超感同步" : "Hyper Sync",
       titleEn: "TIER 01",
       percentLabel: "TOP 5%",
       statusPrimary: "Trapezius: Decompressed",
       statusSecondary: "Focus Index: Top 5%",
       diagnosis: isZh
-        ? "視覺神經衝動傳導迅速，文字衝突抑制維持在極低損耗區間。"
-        : "Visual impulse transmission is rapid. Conflict suppression stays in the low-loss band.",
+        ? "今次 response latency 很低，衝突抑制維持在低損耗區間。"
+        : "This run’s response latency was low. Conflict filtering stayed in the low-loss band.",
+      diagnosisSupport: null,
+      sessionNote,
       interferenceLabel: isZh ? "極低干擾" : "High Resilience",
       breathLabel: completedBreathingBeforeTest ? "ALIGNED" : "STABLE",
       isApex: false,
@@ -310,8 +332,10 @@ export function getTierConfig(data: TierInput): TierConfig {
       statusPrimary: "Trapezius: Neutral",
       statusSecondary: "Focus Index: Top 30%",
       diagnosis: isZh
-        ? "視覺傳導維持敏捷，抗干擾濾波在可接受區間內穩定運作。"
-        : "Visual conduction remains sharp. Interference filtering is stable within range.",
+        ? "今次表現穩陣，filtering 在正常區間內運作。"
+        : "This run was solid. Filtering stayed stable within range.",
+      diagnosisSupport: null,
+      sessionNote,
       interferenceLabel: isZh ? "平衡抑制" : "Balanced Control",
       breathLabel: completedBreathingBeforeTest ? "ALIGNED" : "STABLE",
       isApex: false,
@@ -330,14 +354,16 @@ export function getTierConfig(data: TierInput): TierConfig {
       cardBorder: "rgba(24, 24, 27, 0.1)",
       cardBackground: "#F8F9FA",
       progress: 0.48,
-      title: isZh ? "認知負載" : "Cognitive Load",
+      title: isZh ? "負載偏高" : "Elevated Load",
       titleEn: "TIER 03",
       percentLabel: "TOP 60%",
       statusPrimary: "Trapezius: Elevated",
       statusSecondary: "Focus Index: Baseline",
       diagnosis: isZh
-        ? "反應通道尚可，但大腦緩存（Cache）即將爆滿，文字意義干擾已開始擊穿前額葉防線。"
-        : "Response channels remain intact, but cortical cache is near saturation — semantic interference is beginning to breach prefrontal defenses.",
+        ? "今日個引擎仲未完全 warm up。Signal 有啲亂，但唔代表系統壞咗。"
+        : "Today’s engine hasn’t fully warmed up. Signal is a bit noisy — that doesn’t mean the system is broken.",
+      diagnosisSupport: retestSupport,
+      sessionNote,
       interferenceLabel: isZh ? "中度干擾" : "Moderate Load",
       breathLabel: "DRIFT",
       isApex: false,
@@ -355,24 +381,50 @@ export function getTierConfig(data: TierInput): TierConfig {
     cardBorder: "rgba(127, 29, 29, 0.8)",
     cardBackground: "#09090b",
     progress: 0.22,
-    title: isZh ? "神經疲勞" : "Neural Fatigue",
+    title: isZh ? "赤紅脈衝" : "Crimson Impulse",
     titleEn: "TIER 04",
     percentLabel: "RECHARGE",
     statusPrimary: "Trapezius: Guarded",
     statusSecondary: "Focus Index: Recharge",
     diagnosis: isZh
-      ? "前額葉抑制系統疑似離線，神經傳導出現嚴重丟包（Packet Loss）。認知頻寬已見底，建議立即物理切斷工作環境並避免任何重大決策。"
-      : "Prefrontal inhibition appears offline — severe neural packet loss detected. Cognitive bandwidth is exhausted. Physically disconnect from the work environment and avoid any major decisions.",
+      ? "呢次 run 似乎唔係最佳狀態。今次 response latency 偏高，signal 未完全對齊。"
+      : "This run doesn’t look like peak form. Response latency ran high and signal alignment slipped.",
+    diagnosisSupport: retestSupport,
+    sessionNote,
     interferenceLabel:
       interference > 220
         ? isZh
-          ? "高負載干擾"
-          : "Overloaded"
+          ? "高延遲干擾"
+          : "High Latency"
         : isZh
-          ? "疲勞區間"
-          : "Fatigue Band",
+          ? "延遲偏高"
+          : "Elevated Latency",
     breathLabel: "DRIFT",
     isApex: false,
     ...emptyApexFields(),
   };
+}
+
+/** Flag sessions that look interrupted / device-lagged — presentation only. */
+export function isAbnormalSession(input: {
+  latencies: number[];
+  stroopLatencies: number[];
+  interrupted: boolean;
+}) {
+  if (input.interrupted) return true;
+  const ABNORMAL_SRT_MS = 2000;
+  const ABNORMAL_STROOP_MS = 3500;
+  if (input.latencies.some((ms) => ms >= ABNORMAL_SRT_MS)) return true;
+  if (input.stroopLatencies.some((ms) => ms >= ABNORMAL_STROOP_MS)) return true;
+  if (input.latencies.length >= 3) {
+    const sorted = [...input.latencies].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    const med =
+      sorted.length % 2 === 0
+        ? (sorted[mid - 1] + sorted[mid]) / 2
+        : sorted[mid];
+    const max = sorted[sorted.length - 1];
+    if (med > 0 && max >= Math.max(ABNORMAL_SRT_MS, med * 4)) return true;
+  }
+  return false;
 }

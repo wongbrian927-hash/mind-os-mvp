@@ -101,7 +101,7 @@ export const MOCK_TIERS: Record<MockTierKey, MockTierPayload> = {
   },
   tier4: {
     key: "tier4",
-    label: "Tier 4 · 神經疲勞",
+    label: "Tier 4 · Crimson Impulse",
     latency: 380,
     interference: TIER_BASELINE_LOSS[4],
     accuracy: 50,
