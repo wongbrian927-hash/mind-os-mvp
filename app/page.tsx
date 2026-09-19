@@ -2,9 +2,9 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import BrandHeader from "@/app/components/BrandHeader";
 import ResultCard from "@/app/components/ResultCard";
 import DevTierMockPanel from "@/app/components/DevTierMockPanel";
-import Logo from "@/app/components/Logo";
 import {
   MOCK_TIERS,
   buildMockTrialData,
@@ -711,6 +711,19 @@ function Home() {
     setBreathPanelOpen(false);
   };
 
+  const goHome = () => {
+    retrySession();
+    cyclesRef.current = 0;
+    phaseRef.current = "inhale";
+    remainingRef.current = PHASE_MS.inhale;
+    setCycles(0);
+    setPhase("inhale");
+    setSecondsLeft(5);
+    setScale(MIN_SCALE);
+    setTransitionMs(300);
+    setCompletedBreathingBeforeTest(false);
+  };
+
   const injectMockTier = useCallback(
     (key: MockTierKey) => {
       if (!IS_DEV) return;
@@ -829,17 +842,7 @@ function Home() {
       />
 
       <header className="fixed inset-x-0 top-0 z-20 flex items-start justify-between gap-4 px-4 pt-4 sm:px-8 sm:pt-8">
-        <div className="min-w-0 text-left">
-          <div className="flex items-center gap-2.5">
-            <Logo size={22} className="shrink-0 text-slate-300" />
-            <p className="text-[11px] font-medium tracking-[0.36em] text-slate-400/80 sm:tracking-[0.42em]">
-              MIND OS
-            </p>
-          </div>
-          <p className="mt-1 truncate text-[10px] tracking-widest text-slate-500 sm:text-xs">
-            {t.subtitle}
-          </p>
-        </div>
+        <BrandHeader subtitle={t.subtitle} onNavigateHome={goHome} />
         <div className="flex shrink-0 items-center gap-2 pt-0.5 text-[11px] tracking-[0.2em] text-slate-500">
           <button
             type="button"
