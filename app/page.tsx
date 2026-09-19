@@ -28,10 +28,18 @@ const IS_DEV = process.env.NODE_ENV === "development";
 
 type Lang = "zh" | "en";
 type BreathPhase = "inhale" | "exhale";
-type ReactionPhase = "ready" | "buffer" | "waiting" | "go" | "recorded" | "too_soon";
+type ReactionPhase =
+  | "ready"
+  | "instruction"
+  | "countdown"
+  | "waiting"
+  | "go"
+  | "recorded"
+  | "too_soon";
 type SessionStage = "srt" | "stroop" | "summary";
-type StroopPhase = "intro" | "stimulus" | "gap";
+type StroopPhase = "instruction" | "countdown" | "stimulus" | "gap";
 type InkColor = "red" | "blue";
+type CountdownStep = "3" | "2" | "1" | "START";
 
 type StroopTrial = {
   wordColor: InkColor;
@@ -51,8 +59,9 @@ const FOREPERIOD_MIN_MS = 1500;
 const FOREPERIOD_MAX_MS = 6000;
 const FALSE_START_MS = 50;
 const STROOP_COUNT = 4;
-const BUFFER_SECONDS = 2;
-const STROOP_BUFFER_SECONDS = 3;
+const COUNTDOWN_DIGIT_MS = 800;
+const COUNTDOWN_START_MS = 500;
+const COUNTDOWN_STEPS: CountdownStep[] = ["3", "2", "1", "START"];
 const MIN_SCALE = 1;
 const MAX_SCALE = 1.5;
 const PHASE_DURATION_MS = 5000;
@@ -83,19 +92,28 @@ const COPY = {
     pause: "暫停",
     resume: "繼續",
     round: (x: number) => `循環 ${x} / ${TARGET_CYCLES}`,
-    srtTitle: "第一階段 · 純反應測試",
-    srtHint: "請在畫面變綠時立即按空白鍵 或 點擊此處 / Tap screen",
+    srtTitle: "反應速度測試",
+    srtInstructionTitle: "畫面變綠時，立刻點擊螢幕",
+    srtInstructionBody: "變綠之前請勿點擊。太早點擊會判定為無效，並重新開始該次。",
+    srtInstructionMobile: "手機：用手指點擊畫面中央區域。",
+    srtInstructionDesktop: "電腦：亦可按空白鍵（Space）。",
+    srtHint: "請在畫面變綠時立即按空白鍵 或 點擊此處",
+    readyCta: "準備好了",
     tooSoon: "太早喇，等變綠再撳或點擊",
     pressNow: "而家撳空白鍵或點擊此處",
     waitGreen: "等變綠，即刻撳空白鍵或點擊此處",
     retry: "重試",
-    stroopTitle: "色彩專注測試",
-    stroopRule: "只睇字體顏色，唔好睇字面意思",
-    keyGuide: "R = 紅色 ｜ B = 藍色",
-    keyHint: "建議：左手食指 R，右手食指 B",
-    stroopCountdown: (n: number) => `測試將於 ${n} 秒後開始...`,
-    btnRed: "🔴 紅色 (Red)",
-    btnBlue: "🔵 藍色 (Blue)",
+    stroopTitle: "色彩干擾測試",
+    stroopInstructionTitle: "看到顏色後，選擇文字的顏色",
+    stroopInstructionBody: "請忽略文字本身的意思，只判斷它顯示的顏色。",
+    stroopExampleRed:
+      "如果「藍色」兩個字以紅色顯示 → 選「紅」",
+    stroopExampleBlue:
+      "如果「紅色」兩個字以藍色顯示 → 選「藍」",
+    stroopMobileHint: "畫面下方會顯示",
+    stroopDesktopKeys: "電腦亦可使用鍵盤：紅 [R]　藍 [B]",
+    btnRed: "紅",
+    btnBlue: "藍",
     word: { red: "紅", blue: "藍" } as Record<InkColor, string>,
     again: "再測一次",
     tier00BreathHint:
@@ -117,19 +135,26 @@ const COPY = {
     pause: "Pause",
     resume: "Resume",
     round: (x: number) => `Round ${x} / ${TARGET_CYCLES}`,
-    srtTitle: "Stage 1 · Simple Reaction",
-    srtHint: "When green, press Space or tap here / Tap screen",
+    srtTitle: "Reaction Speed Test",
+    srtInstructionTitle: "When the screen turns green, tap immediately",
+    srtInstructionBody: "Do not tap before green. Early taps are invalid and that trial restarts.",
+    srtInstructionMobile: "Mobile: tap the center of the screen.",
+    srtInstructionDesktop: "Desktop: you can also press Space.",
+    srtHint: "When green, press Space or tap here",
+    readyCta: "I'm ready",
     tooSoon: "Too soon. Wait for green.",
     pressNow: "Press Space or tap now",
     waitGreen: "Wait for green, then press Space or tap",
     retry: "Retry",
-    stroopTitle: "Color Focus Test",
-    stroopRule: "Pick font COLOR, not the word",
-    keyGuide: "R = Red ｜ B = Blue",
-    keyHint: "Left hand R, Right hand B",
-    stroopCountdown: (n: number) => `Starts in ${n}s...`,
-    btnRed: "🔴 Red",
-    btnBlue: "🔵 Blue",
+    stroopTitle: "Color Interference Test",
+    stroopInstructionTitle: "Choose the color the word is shown in",
+    stroopInstructionBody: "Ignore the word meaning. Respond only to the display color.",
+    stroopExampleRed: 'If “BLUE” appears in red → choose Red',
+    stroopExampleBlue: 'If “RED” appears in blue → choose Blue',
+    stroopMobileHint: "Buttons appear below:",
+    stroopDesktopKeys: "Desktop keys: Red [R] · Blue [B]",
+    btnRed: "Red",
+    btnBlue: "Blue",
     word: { red: "RED", blue: "BLUE" } as Record<InkColor, string>,
     again: "Retry",
     tier00BreathHint:
@@ -243,11 +268,11 @@ function Home() {
 
   const [sessionStage, setSessionStage] = useState<SessionStage>("srt");
   const [reactionPhase, setReactionPhase] = useState<ReactionPhase>("ready");
-  const [bufferCount, setBufferCount] = useState(BUFFER_SECONDS);
+  const [countdownLabel, setCountdownLabel] = useState<CountdownStep | null>(null);
   const [latencies, setLatencies] = useState<number[]>([]);
   const [lastLatency, setLastLatency] = useState<number | null>(null);
 
-  const [stroopPhase, setStroopPhase] = useState<StroopPhase>("intro");
+  const [stroopPhase, setStroopPhase] = useState<StroopPhase>("instruction");
   const [stroopTrials, setStroopTrials] = useState<StroopTrial[]>([]);
   const [stroopIndex, setStroopIndex] = useState(0);
   const [stroopResults, setStroopResults] = useState<StroopResult[]>([]);
@@ -265,12 +290,13 @@ function Home() {
   const breathTimerRef = useRef<number | null>(null);
   const tickTimerRef = useRef<number | null>(null);
   const waitTimerRef = useRef<number | null>(null);
+  const countdownTimerRef = useRef<number | null>(null);
   const goAtRef = useRef<number | null>(null);
 
   const sessionStageRef = useRef<SessionStage>("srt");
   const reactionPhaseRef = useRef<ReactionPhase>("ready");
   const latenciesRef = useRef<number[]>([]);
-  const stroopPhaseRef = useRef<StroopPhase>("intro");
+  const stroopPhaseRef = useRef<StroopPhase>("instruction");
   const stroopTrialsRef = useRef<StroopTrial[]>([]);
   const stroopIndexRef = useRef(0);
   const stroopResultsRef = useRef<StroopResult[]>([]);
@@ -437,7 +463,34 @@ function Home() {
     setStroopPhase("stimulus");
   }, []);
 
+  const runCountdown = useCallback((onComplete: () => void) => {
+    clearTimer(countdownTimerRef);
+    let stepIndex = 0;
+    setCountdownLabel(COUNTDOWN_STEPS[0]);
+
+    const scheduleNext = () => {
+      const current = COUNTDOWN_STEPS[stepIndex];
+      const delay =
+        current === "START" ? COUNTDOWN_START_MS : COUNTDOWN_DIGIT_MS;
+      countdownTimerRef.current = window.setTimeout(() => {
+        stepIndex += 1;
+        if (stepIndex >= COUNTDOWN_STEPS.length) {
+          countdownTimerRef.current = null;
+          setCountdownLabel(null);
+          onComplete();
+          return;
+        }
+        setCountdownLabel(COUNTDOWN_STEPS[stepIndex]);
+        scheduleNext();
+      }, delay);
+    };
+
+    scheduleNext();
+  }, []);
+
   const enterStroop = useCallback(() => {
+    clearTimer(countdownTimerRef);
+    setCountdownLabel(null);
     const trials = buildStroopTrials();
     stroopTrialsRef.current = trials;
     stroopResultsRef.current = [];
@@ -445,13 +498,12 @@ function Home() {
     stroopLockedRef.current = true;
     stroopShownAtRef.current = null;
     sessionStageRef.current = "stroop";
-    stroopPhaseRef.current = "intro";
+    stroopPhaseRef.current = "instruction";
     setStroopTrials(trials);
     setStroopResults([]);
     setStroopIndex(0);
     setSessionStage("stroop");
-    setStroopPhase("intro");
-    setBufferCount(STROOP_BUFFER_SECONDS);
+    setStroopPhase("instruction");
   }, []);
 
   const startReactionTest = useCallback(() => {
@@ -469,20 +521,49 @@ function Home() {
       setScale(readScale(orbRef.current));
     }
     setBreathPanelOpen(false);
+    clearTimer(countdownTimerRef);
+    setCountdownLabel(null);
     latenciesRef.current = [];
     setLatencies([]);
     setLastLatency(null);
-    setBufferCount(BUFFER_SECONDS);
-    reactionPhaseRef.current = "buffer";
-    setReactionPhase("buffer");
+    reactionPhaseRef.current = "instruction";
+    setReactionPhase("instruction");
   }, []);
 
   startReactionTestRef.current = startReactionTest;
 
+  const confirmReactionReady = useCallback(() => {
+    if (sessionStageRef.current !== "srt") return;
+    if (reactionPhaseRef.current !== "instruction") return;
+    reactionPhaseRef.current = "countdown";
+    setReactionPhase("countdown");
+    runCountdown(() => {
+      armTrial();
+    });
+  }, [armTrial, runCountdown]);
+
+  const confirmStroopReady = useCallback(() => {
+    if (sessionStageRef.current !== "stroop") return;
+    if (stroopPhaseRef.current !== "instruction") return;
+    stroopPhaseRef.current = "countdown";
+    setStroopPhase("countdown");
+    stroopLockedRef.current = true;
+    runCountdown(() => {
+      beginStroopStimulus(0);
+    });
+  }, [beginStroopStimulus, runCountdown]);
+
   const handleReaction = useCallback(() => {
     const current = reactionPhaseRef.current;
     if (sessionStageRef.current !== "srt") return;
-    if (current === "buffer" || current === "ready") return;
+    if (
+      current === "ready" ||
+      current === "instruction" ||
+      current === "countdown" ||
+      current === "recorded"
+    ) {
+      return;
+    }
 
     const markFalseStart = () => {
       reactionPhaseRef.current = "too_soon";
@@ -591,45 +672,13 @@ function Home() {
   handleStroopKeyRef.current = handleStroopKey;
 
   useEffect(() => {
-    if (reactionPhase !== "buffer") return;
-    setBufferCount(BUFFER_SECONDS);
-    let remaining = BUFFER_SECONDS;
-    const id = window.setInterval(() => {
-      remaining -= 1;
-      if (remaining <= 0) {
-        window.clearInterval(id);
-        armTrial();
-        return;
-      }
-      setBufferCount(remaining);
-    }, 1000);
-    return () => window.clearInterval(id);
-  }, [armTrial, reactionPhase]);
-
-  useEffect(() => {
-    if (sessionStage !== "stroop" || stroopPhase !== "intro") return;
-    setBufferCount(STROOP_BUFFER_SECONDS);
-    let remaining = STROOP_BUFFER_SECONDS;
-    const id = window.setInterval(() => {
-      remaining -= 1;
-      if (remaining <= 0) {
-        window.clearInterval(id);
-        beginStroopStimulus(0);
-        return;
-      }
-      setBufferCount(remaining);
-    }, 1000);
-    return () => window.clearInterval(id);
-  }, [beginStroopStimulus, sessionStage, stroopPhase]);
-
-  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const stage = sessionStageRef.current;
 
       if (stage === "srt") {
         if (!isSpaceKey(event)) return;
         const srtPhase = reactionPhaseRef.current;
-        if (srtPhase === "buffer") {
+        if (srtPhase === "instruction" || srtPhase === "countdown") {
           event.preventDefault();
           return;
         }
@@ -667,6 +716,7 @@ function Home() {
       clearTimer(breathTimerRef);
       clearTimer(tickTimerRef);
       clearTimer(waitTimerRef);
+      clearTimer(countdownTimerRef);
     };
   }, []);
 
@@ -674,13 +724,14 @@ function Home() {
     clearTimer(waitTimerRef);
     clearTimer(breathTimerRef);
     clearTimer(tickTimerRef);
+    clearTimer(countdownTimerRef);
     runningRef.current = false;
     latenciesRef.current = [];
     stroopResultsRef.current = [];
     stroopTrialsRef.current = [];
     sessionStageRef.current = "srt";
     reactionPhaseRef.current = "ready";
-    stroopPhaseRef.current = "intro";
+    stroopPhaseRef.current = "instruction";
     stroopIndexRef.current = 0;
     stroopShownAtRef.current = null;
     stroopLockedRef.current = false;
@@ -691,8 +742,8 @@ function Home() {
     setStroopIndex(0);
     setSessionStage("srt");
     setReactionPhase("ready");
-    setStroopPhase("intro");
-    setBufferCount(BUFFER_SECONDS);
+    setStroopPhase("instruction");
+    setCountdownLabel(null);
     setReportAt(null);
     setMockSessionId(null);
     setApexVariant(null);
@@ -732,7 +783,7 @@ function Home() {
       stroopResultsRef.current = nextStroop;
       sessionStageRef.current = "summary";
       reactionPhaseRef.current = "ready";
-      stroopPhaseRef.current = "intro";
+      stroopPhaseRef.current = "instruction";
 
       // Lock apex skin once at inject: explicit mock override, or 50/50 for bare tier0.
       const lockedVariant =
@@ -768,7 +819,7 @@ function Home() {
     stroopResultsRef.current = nextStroop;
     sessionStageRef.current = "summary";
     reactionPhaseRef.current = "ready";
-    stroopPhaseRef.current = "intro";
+    stroopPhaseRef.current = "instruction";
 
     setLatencies(nextLatencies);
     setLastLatency(nextLatencies[nextLatencies.length - 1] ?? null);
@@ -996,17 +1047,34 @@ function Home() {
               : "rounded-3xl border border-white/5 bg-white/[0.03] px-4 py-5 sm:min-h-[28rem] sm:flex-none sm:px-6 sm:py-10"
           }`}
         >
-          {sessionStage === "srt" && reactionPhase === "buffer" ? (
+          {sessionStage === "srt" && reactionPhase === "instruction" ? (
+            <div className="flex w-full max-w-md flex-col items-center justify-center px-1">
+              <p className="text-[11px] tracking-[0.35em] text-slate-400">{t.srtTitle}</p>
+              <h2 className="mt-5 text-balance text-xl font-medium leading-snug tracking-wide text-[#f8fafc] sm:text-2xl">
+                {t.srtInstructionTitle}
+              </h2>
+              <p className="mt-4 text-sm leading-7 text-slate-300">{t.srtInstructionBody}</p>
+              <p className="mt-5 text-sm leading-6 text-slate-400">{t.srtInstructionMobile}</p>
+              <p className="mt-2 hidden text-sm leading-6 text-slate-500 sm:block">
+                {t.srtInstructionDesktop}
+              </p>
+              <button
+                type="button"
+                onClick={confirmReactionReady}
+                className="mt-10 flex min-h-14 w-full items-center justify-center rounded-full bg-sky-300 px-8 py-4 text-sm font-semibold tracking-[0.18em] text-slate-900 shadow-[0_0_48px_rgba(125,211,252,0.35)] transition hover:bg-sky-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-200"
+              >
+                {t.readyCta}
+              </button>
+            </div>
+          ) : sessionStage === "srt" && reactionPhase === "countdown" ? (
             <div className="flex flex-col items-center justify-center">
               <p className="text-[11px] tracking-[0.35em] text-slate-400">{t.srtTitle}</p>
-              <p className="mt-5 max-w-md text-base font-medium leading-7 tracking-wide text-sky-200">
-                {t.srtHint}
-              </p>
-              <p className="mt-10 text-6xl font-light tabular-nums text-[#f8fafc]">
-                {bufferCount}
-              </p>
-              <p className="mt-4 text-xs tracking-[0.28em] text-slate-500">
-                {lang === "zh" ? "準備" : "Ready"}
+              <p
+                className={`mt-12 font-light tabular-nums text-[#f8fafc] ${
+                  countdownLabel === "START" ? "text-4xl tracking-[0.2em]" : "text-7xl"
+                }`}
+              >
+                {countdownLabel}
               </p>
             </div>
           ) : sessionStage === "srt" ? (
@@ -1053,24 +1121,62 @@ function Home() {
                       : `${latencies.length + 1} / ${REACTION_TRIALS}`}
                 </span>
               </div>
-              <p className="mt-5 text-xs tracking-[0.18em] text-slate-500">
+              <p className="mt-5 text-xs tracking-[0.18em] text-slate-500 sm:hidden">
+                Tap screen
+              </p>
+              <p className="mt-5 hidden text-xs tracking-[0.18em] text-slate-500 sm:block">
                 Space / Tap screen
               </p>
             </button>
-          ) : sessionStage === "stroop" ? (
+          ) : sessionStage === "stroop" && stroopPhase === "instruction" ? (
+            <div className="flex w-full max-w-md flex-col items-center justify-center px-1">
+              <p className="text-[11px] tracking-[0.35em] text-slate-400">{t.stroopTitle}</p>
+              <h2 className="mt-5 text-balance text-xl font-medium leading-snug tracking-wide text-[#f8fafc] sm:text-2xl">
+                {t.stroopInstructionTitle}
+              </h2>
+              <p className="mt-4 text-sm leading-7 text-slate-300">
+                {t.stroopInstructionBody}
+              </p>
+              <div className="mt-6 w-full space-y-3 text-left text-sm leading-7 text-slate-400">
+                <p>{t.stroopExampleRed}</p>
+                <p>{t.stroopExampleBlue}</p>
+              </div>
+              <p className="mt-7 text-xs tracking-[0.2em] text-slate-500">{t.stroopMobileHint}</p>
+              <div className="mt-3 grid w-full grid-cols-2 gap-3">
+                <div className="rounded-xl bg-rose-500/90 py-4 text-center text-lg font-bold text-white">
+                  {t.btnRed}
+                </div>
+                <div className="rounded-xl bg-blue-500/90 py-4 text-center text-lg font-bold text-white">
+                  {t.btnBlue}
+                </div>
+              </div>
+              <p className="mt-4 hidden text-xs leading-5 tracking-wide text-slate-500 sm:block">
+                {t.stroopDesktopKeys}
+              </p>
+              <button
+                type="button"
+                onClick={confirmStroopReady}
+                className="mt-8 flex min-h-14 w-full items-center justify-center rounded-full bg-sky-300 px-8 py-4 text-sm font-semibold tracking-[0.18em] text-slate-900 shadow-[0_0_48px_rgba(125,211,252,0.35)] transition hover:bg-sky-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-200"
+              >
+                {t.readyCta}
+              </button>
+            </div>
+          ) : sessionStage === "stroop" && stroopPhase === "countdown" ? (
             <div className="flex flex-col items-center justify-center">
               <p className="text-[11px] tracking-[0.35em] text-slate-400">{t.stroopTitle}</p>
-              <p className="mt-4 max-w-sm text-sm leading-7 text-slate-400">{t.stroopRule}</p>
-              <div className="mt-6 flex flex-col items-center justify-center gap-2 text-sm">
-                <p className="tracking-wide text-slate-300">{t.keyGuide}</p>
-                <p className="text-xs tracking-wide text-slate-500">{t.keyHint}</p>
-              </div>
-              <div className="mt-8 flex min-h-24 items-center justify-center sm:mt-12 sm:min-h-28">
-                {stroopPhase === "intro" ? (
-                  <p className="max-w-xs px-2 text-sm font-medium leading-7 tracking-wide text-sky-200 sm:max-w-sm sm:text-lg sm:leading-8">
-                    {t.stroopCountdown(bufferCount)}
-                  </p>
-                ) : stroopPhase === "stimulus" && currentStroop ? (
+              <p
+                className={`mt-12 font-light tabular-nums text-[#f8fafc] ${
+                  countdownLabel === "START" ? "text-4xl tracking-[0.2em]" : "text-7xl"
+                }`}
+              >
+                {countdownLabel}
+              </p>
+            </div>
+          ) : sessionStage === "stroop" ? (
+            <div className="flex w-full max-w-md flex-col items-center justify-center">
+              <p className="text-[11px] tracking-[0.35em] text-slate-400">{t.stroopTitle}</p>
+              <div className="mt-10 flex min-h-28 items-center justify-center sm:mt-12 sm:min-h-32">
+                {stroopPhase === "stimulus" && currentStroop ? (
                   <p
                     className="text-7xl font-medium tracking-[0.28em]"
                     style={{ color: INK_HEX[currentStroop.ink] }}
@@ -1082,35 +1188,39 @@ function Home() {
                 )}
               </div>
               <p className="mt-6 text-xs tracking-[0.28em] text-slate-500 sm:mt-8">
-                {stroopPhase === "intro" ? 0 : Math.min(stroopIndex + 1, STROOP_COUNT)} /{" "}
-                {STROOP_COUNT}
+                {Math.min(stroopIndex + 1, STROOP_COUNT)} / {STROOP_COUNT}
               </p>
-              {stroopPhase === "stimulus" ? (
-                <div className="mt-5 grid w-full max-w-md grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => handleStroopKey("red")}
-                    onTouchStart={(event) => {
-                      event.preventDefault();
-                      handleStroopKey("red");
-                    }}
-                    className="rounded-xl bg-rose-500 py-4 text-lg font-bold text-white shadow-[0_0_24px_rgba(244,63,94,0.35)] transition active:scale-95"
-                  >
-                    {t.btnRed}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleStroopKey("blue")}
-                    onTouchStart={(event) => {
-                      event.preventDefault();
-                      handleStroopKey("blue");
-                    }}
-                    className="rounded-xl bg-blue-500 py-4 text-lg font-bold text-white shadow-[0_0_24px_rgba(59,130,246,0.35)] transition active:scale-95"
-                  >
-                    {t.btnBlue}
-                  </button>
-                </div>
-              ) : null}
+              <div className="mt-5 grid w-full grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  disabled={stroopPhase !== "stimulus"}
+                  onClick={() => handleStroopKey("red")}
+                  onTouchStart={(event) => {
+                    if (stroopPhase !== "stimulus") return;
+                    event.preventDefault();
+                    handleStroopKey("red");
+                  }}
+                  className="min-h-16 rounded-xl bg-rose-500 py-5 text-xl font-bold text-white shadow-[0_0_24px_rgba(244,63,94,0.35)] transition active:scale-95 disabled:pointer-events-none disabled:opacity-40"
+                >
+                  {t.btnRed}
+                </button>
+                <button
+                  type="button"
+                  disabled={stroopPhase !== "stimulus"}
+                  onClick={() => handleStroopKey("blue")}
+                  onTouchStart={(event) => {
+                    if (stroopPhase !== "stimulus") return;
+                    event.preventDefault();
+                    handleStroopKey("blue");
+                  }}
+                  className="min-h-16 rounded-xl bg-blue-500 py-5 text-xl font-bold text-white shadow-[0_0_24px_rgba(59,130,246,0.35)] transition active:scale-95 disabled:pointer-events-none disabled:opacity-40"
+                >
+                  {t.btnBlue}
+                </button>
+              </div>
+              <p className="mt-4 hidden text-xs tracking-wide text-slate-500 sm:block">
+                {t.stroopDesktopKeys}
+              </p>
             </div>
           ) : avgSrt !== null &&
             rawInterference !== null &&
