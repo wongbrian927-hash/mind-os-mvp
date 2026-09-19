@@ -10,6 +10,12 @@ import {
   type ApexVariant,
   type TierLevel,
 } from "@/lib/calculateTier";
+import {
+  compareAccuracy,
+  compareInterference,
+  compareReaction,
+  type HistoryRun,
+} from "@/lib/history";
 import { PUBLIC_HOST, PUBLIC_URL } from "@/lib/config";
 import Logo from "@/app/components/Logo";
 import WallpaperModal from "@/app/components/WallpaperModal";
@@ -32,6 +38,8 @@ export type ResultCardProps = Pick<
   onSaved?: () => void;
   /** Dev mock only — forces a fixed session id on the card. */
   sessionIdOverride?: string;
+  /** Last valid run before this one (for subtle vs-last lines). */
+  historyPrevious?: HistoryRun | null;
 };
 
 const COPY = {
@@ -82,6 +90,26 @@ const COPY = {
     qrHint: "Try your reaction speed",
   },
 } as const;
+
+function CmpLine({
+  arrow,
+  label,
+  className,
+}: {
+  arrow: "↑" | "↓" | "→";
+  label: string;
+  className: string;
+}) {
+  return (
+    <p
+      data-export-mono
+      className={`mt-1 font-mono text-[9px] leading-4 tracking-[0.06em] ${className}`}
+    >
+      <span className="mr-1 opacity-80">{arrow}</span>
+      {label}
+    </p>
+  );
+}
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
@@ -272,6 +300,7 @@ export default function ResultCard({
   apexVariant,
   onSaved,
   sessionIdOverride,
+  historyPrevious = null,
 }: ResultCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [viewMode, setViewMode] = useState<CardViewMode>("detailed");
@@ -322,6 +351,25 @@ export default function ResultCard({
   );
   const baseWallpaper = useMemo(() => getBasePortalWallpaper(lang), [lang]);
 
+  const historyTierLabel = isVoid
+    ? "TIER 00X"
+    : `TIER ${String(tier.level).padStart(2, "0")}`;
+  const reactionCmp = historyPrevious
+    ? compareReaction(avgSrt, historyPrevious.reactionMs, lang)
+    : null;
+  const accuracyCmp = historyPrevious
+    ? compareAccuracy(acc, historyPrevious.stroopAccuracy, lang)
+    : null;
+  const interferenceCmp =
+    historyPrevious && historyPrevious.interferenceMs !== null
+      ? compareInterference(interference, historyPrevious.interferenceMs, lang)
+      : null;
+  const cmpTone = isVoid
+    ? "text-zinc-500"
+    : isDarkCard
+      ? "text-slate-500"
+      : "text-zinc-400";
+
   useEffect(() => {
     setQrReady(false);
     let cancelled = false;
@@ -359,6 +407,10 @@ export default function ResultCard({
   }, [isExporting, lang, onSaved, qrReady, sessionId, t.saved, tier.cardBackground]);
 
   const isMinimal = viewMode === "minimal";
+  const showTierPath =
+    !isMinimal &&
+    historyPrevious !== null &&
+    historyPrevious.tier !== historyTierLabel;
   const labelMuted = isVoid
     ? "text-zinc-400"
     : isDarkCard
@@ -571,6 +623,13 @@ export default function ResultCard({
                   ms
                 </span>
               </p>
+              {reactionCmp ? (
+                <CmpLine
+                  arrow={reactionCmp.arrow}
+                  label={reactionCmp.label}
+                  className={cmpTone}
+                />
+              ) : null}
               {isVoid ? (
                 <VoidHairline />
               ) : (
@@ -676,6 +735,16 @@ export default function ResultCard({
                   {tier.titleEn}
                 </p>
               )}
+              {showTierPath && historyPrevious ? (
+                <p
+                  data-export-mono
+                  className={`mt-1.5 font-mono text-[9px] tracking-[0.14em] ${cmpTone}`}
+                >
+                  {historyPrevious.tier}
+                  <span className="mx-1.5 opacity-60">→</span>
+                  {historyTierLabel}
+                </p>
+              ) : null}
             </section>
 
             <section
@@ -701,6 +770,13 @@ export default function ResultCard({
                     ms
                   </span>
                 </p>
+                {!isMinimal && interferenceCmp ? (
+                  <CmpLine
+                    arrow={interferenceCmp.arrow}
+                    label={interferenceCmp.label}
+                    className={cmpTone}
+                  />
+                ) : null}
                 {!isMinimal ? (
                   <p className={`mt-2 text-[10px] leading-4 ${metricSub}`}>
                     {tier.interferenceLabel}
@@ -724,6 +800,17 @@ export default function ResultCard({
                     %
                   </span>
                 </p>
+                {accuracyCmp ? (
+                  <CmpLine
+                    arrow={accuracyCmp.arrow}
+                    label={
+                      isMinimal
+                        ? accuracyCmp.label.replace(" vs last", "")
+                        : accuracyCmp.label
+                    }
+                    className={cmpTone}
+                  />
+                ) : null}
                 {!isMinimal ? (
                   <p className={`mt-2 text-[10px] leading-4 ${metricSub}`}>ACC</p>
                 ) : null}

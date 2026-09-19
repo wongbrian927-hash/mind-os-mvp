@@ -21,6 +21,13 @@ import {
   type ApexVariant,
 } from "@/lib/calculateTier";
 import {
+  appendValidRun,
+  buildHistoryTierLabel,
+  createHistoryId,
+  getLastValidRun,
+  type HistoryRun,
+} from "@/lib/history";
+import {
   getDevTierFixture,
   parseDevTier,
   type DevTierOverride,
@@ -122,6 +129,11 @@ const COPY = {
     abnormalTitle: "這次測試可能受到中斷或延遲影響。",
     abnormalRetry: "重新測試",
     abnormalView: "仍然查看結果",
+    abnormalHistoryNote:
+      "這次測試可能受到中斷或延遲影響，未加入歷史比較。",
+    baselineSaved: "BASELINE SAVED",
+    baselineHint: "下次測試會顯示變化",
+    compareFooter: "與上一次有效測試比較",
     tier00BreathHint:
       "你嘅反應時間已達 TIER 00 水準，但 TIER 00 需要先完成 5-5 呼吸校準才作評定。\n下次先完成呼吸，再做測試。",
     disclaimer:
@@ -167,6 +179,11 @@ const COPY = {
     abnormalTitle: "This run may have been interrupted or delayed.",
     abnormalRetry: "Retake test",
     abnormalView: "View results anyway",
+    abnormalHistoryNote:
+      "This run may have been interrupted or delayed, so it was not added to history.",
+    baselineSaved: "BASELINE SAVED",
+    baselineHint: "Your next run will show the change",
+    compareFooter: "Compared with your last valid run",
     tier00BreathHint:
       "Your reaction time reached TIER 00 level, but TIER 00 requires completing 5-5 calibration first.\nRun the breathing calibration before your next test.",
     disclaimer:
@@ -292,6 +309,10 @@ function Home() {
   const [apexVariant, setApexVariant] = useState<ApexVariant | null>(null);
   const [resultSuspect, setResultSuspect] = useState(false);
   const [forceShowResult, setForceShowResult] = useState(false);
+  const [historyPrevious, setHistoryPrevious] = useState<HistoryRun | null>(null);
+  const [historyNotice, setHistoryNotice] = useState<
+    "none" | "baseline" | "compare" | "invalid"
+  >("none");
 
   const orbRef = useRef<HTMLDivElement>(null);
   const phaseRef = useRef<BreathPhase>("inhale");
@@ -542,6 +563,8 @@ function Home() {
     sessionInterruptedRef.current = false;
     setResultSuspect(false);
     setForceShowResult(false);
+    setHistoryPrevious(null);
+    setHistoryNotice("none");
     reactionPhaseRef.current = "instruction";
     setReactionPhase("instruction");
   }, []);
@@ -675,6 +698,31 @@ function Home() {
           interrupted: sessionInterruptedRef.current,
         });
 
+        if (suspect) {
+          setHistoryPrevious(null);
+          setHistoryNotice("invalid");
+        } else {
+          const previous = getLastValidRun();
+          const tierLabel = buildHistoryTierLabel({
+            latency: avgLatency,
+            interference: interferenceMs,
+            accuracy: accuracyPct,
+            completedBreathingBeforeTest: completedBreathingBeforeTestRef.current,
+            apexVariant: lockedVariant,
+          });
+          appendValidRun({
+            id: createHistoryId(),
+            timestamp: new Date().toISOString(),
+            reactionMs: avgLatency,
+            stroopAccuracy: accuracyPct,
+            interferenceMs: Math.max(0, interferenceMs),
+            tier: tierLabel,
+            valid: true,
+          });
+          setHistoryPrevious(previous);
+          setHistoryNotice(previous ? "compare" : "baseline");
+        }
+
         sessionStageRef.current = "summary";
         setApexVariant(lockedVariant);
         setResultSuspect(suspect);
@@ -801,6 +849,8 @@ function Home() {
     setApexVariant(null);
     setResultSuspect(false);
     setForceShowResult(false);
+    setHistoryPrevious(null);
+    setHistoryNotice("none");
     setIsRunning(false);
     setBreathStarted(false);
     setBreathPanelOpen(false);
@@ -854,6 +904,8 @@ function Home() {
       setSessionStage("summary");
       setResultSuspect(false);
       setForceShowResult(false);
+      setHistoryPrevious(null);
+      setHistoryNotice("none");
       sessionInterruptedRef.current = false;
     },
     [],
@@ -888,6 +940,8 @@ function Home() {
     setSessionStage("summary");
     setResultSuspect(false);
     setForceShowResult(false);
+    setHistoryPrevious(null);
+    setHistoryNotice("none");
     sessionInterruptedRef.current = false;
   }, []);
 
@@ -1298,6 +1352,9 @@ function Home() {
               <p className="mt-6 text-balance text-lg font-medium leading-relaxed tracking-wide text-[#f8fafc] sm:text-xl">
                 {t.abnormalTitle}
               </p>
+              <p className="mt-4 max-w-sm text-xs leading-5 tracking-wide text-slate-500">
+                {t.abnormalHistoryNote}
+              </p>
               <button
                 type="button"
                 onClick={retrySession}
@@ -1326,12 +1383,35 @@ function Home() {
               completedBreathingBeforeTest={completedBreathingBeforeTest}
               apexVariant={apexVariant}
               sessionIdOverride={mockSessionId ?? undefined}
+              historyPrevious={
+                historyNotice === "compare" ? historyPrevious : null
+              }
             />
           ) : null}
         </section>
         ) : null}
         {sessionStage === "summary" && !(resultSuspect && !forceShowResult) ? (
           <div className="mx-auto mb-12 flex w-full max-w-md flex-col gap-2">
+            {historyNotice === "baseline" ? (
+              <div className="mb-3 text-center">
+                <p className="font-mono text-[10px] tracking-[0.28em] text-slate-400">
+                  {t.baselineSaved}
+                </p>
+                <p className="mt-1.5 text-[11px] leading-5 text-slate-600">
+                  {t.baselineHint}
+                </p>
+              </div>
+            ) : null}
+            {historyNotice === "compare" ? (
+              <p className="mb-3 text-center font-mono text-[9px] tracking-[0.16em] text-slate-600">
+                {t.compareFooter}
+              </p>
+            ) : null}
+            {historyNotice === "invalid" ? (
+              <p className="mb-3 text-center text-[11px] leading-5 text-slate-500">
+                {t.abnormalHistoryNote}
+              </p>
+            ) : null}
             {avgSrt !== null &&
             rawInterference !== null &&
             acc !== null &&
