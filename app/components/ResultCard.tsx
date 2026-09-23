@@ -43,8 +43,6 @@ export type ResultCardProps = Pick<
 const SHARE_EXPORT_WIDTH = 1080;
 const SHARE_EXPORT_HEIGHT = 1600;
 const SHARE_ASPECT = `${SHARE_EXPORT_WIDTH} / ${SHARE_EXPORT_HEIGHT}`;
-/** Minimum space below QR / footer bottom edge inside the card. */
-const SHARE_FOOTER_SAFE_PAD = 12;
 
 const COPY = {
   zh: {
@@ -248,22 +246,21 @@ async function waitForFontsReady() {
   }
 }
 
-/**
- * Ensure footer / QR sit fully inside the laid-out card (preview size).
- * Export upscales this layout — it must already fit on screen.
- */
+/** QR bottom must stay ≥48px above the 1080×1600 canvas edge after export scale. */
 function assertShareFooterFits(source: HTMLElement) {
   const cardRect = source.getBoundingClientRect();
+  const scale = SHARE_EXPORT_WIDTH / Math.max(cardRect.width, 1);
   const qr = source.querySelector<HTMLElement>("[data-export-qr]");
   const footer = source.querySelector("footer");
   const target = qr ?? footer;
   if (!target) return;
 
-  const bottom = target.getBoundingClientRect().bottom;
-  const limit = cardRect.bottom - SHARE_FOOTER_SAFE_PAD;
+  // Compare in export pixels. Preview CSS is scaled up to fill 1080×1600.
+  const bottom = (target.getBoundingClientRect().bottom - cardRect.top) * scale;
+  const limit = SHARE_EXPORT_HEIGHT - 48;
   if (bottom > limit + 0.5) {
     throw new Error(
-      `Share card footer overflows bounds (bottom ${bottom.toFixed(1)} > limit ${limit.toFixed(1)})`,
+      `Share card footer overflows export bounds (bottom ${bottom.toFixed(1)} > limit ${limit.toFixed(1)})`,
     );
   }
 }
@@ -571,7 +568,7 @@ export default function ResultCard({
 
           <div
             data-card-shell
-            className="relative z-[1] flex w-full flex-col px-5 pb-12 pt-5"
+            className="relative z-[1] flex w-full flex-col px-5 pb-[17px] pt-5"
           >
             {/* 1. HEADER */}
             <header
@@ -895,11 +892,11 @@ export default function ResultCard({
               ) : null}
             </section>
 
-            {/* 7. FOOTER — normal flow after status (~56px gap), not pinned to canvas bottom */}
+            {/* 7. FOOTER — ~20px preview gap scales to ~56px on the 1080 canvas */}
             {isVoid ? (
               <footer
                 data-card-block
-                className="mt-14 flex w-full shrink-0 items-end justify-between gap-3 border-t border-zinc-700/60 pt-2.5"
+                className="mt-5 flex w-full shrink-0 items-end justify-between gap-3 border-t border-zinc-700/60 pt-3.5"
               >
                 <span className="font-mono text-[8px] text-zinc-500">
                   {PUBLIC_HOST}
@@ -909,7 +906,7 @@ export default function ResultCard({
             ) : (
               <footer
                 data-card-block
-                className={`mt-14 flex shrink-0 items-end justify-between gap-3 border-t pt-2.5 ${rule}`}
+                className={`mt-5 flex shrink-0 items-end justify-between gap-3 border-t pt-3.5 ${rule}`}
               >
                 <p
                   data-export-label
