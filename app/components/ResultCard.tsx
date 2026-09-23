@@ -249,18 +249,11 @@ async function waitForFontsReady() {
 }
 
 /**
- * Ensure footer / QR sit fully inside the export card (no clip).
- * Measures after the card is forced to export pixel size.
+ * Ensure footer / QR sit fully inside the laid-out card (preview size).
+ * Export upscales this layout — it must already fit on screen.
  */
 function assertShareFooterFits(source: HTMLElement) {
   const cardRect = source.getBoundingClientRect();
-  if (Math.abs(cardRect.width - SHARE_EXPORT_WIDTH) > 2) {
-    // Still constrained by a parent — cannot trust geometry.
-    throw new Error(
-      `Share card not at export width (got ${cardRect.width.toFixed(0)}px, need ${SHARE_EXPORT_WIDTH}px)`,
-    );
-  }
-
   const qr = source.querySelector<HTMLElement>("[data-export-qr]");
   const footer = source.querySelector("footer");
   const target = qr ?? footer;
@@ -270,20 +263,37 @@ function assertShareFooterFits(source: HTMLElement) {
   const limit = cardRect.bottom - SHARE_FOOTER_SAFE_PAD;
   if (bottom > limit + 0.5) {
     throw new Error(
-      `Share card footer overflows export bounds (bottom ${bottom.toFixed(1)} > limit ${limit.toFixed(1)})`,
+      `Share card footer overflows bounds (bottom ${bottom.toFixed(1)} > limit ${limit.toFixed(1)})`,
     );
   }
 }
 
-/** Capture share card as a fixed 1080×1600 PNG. */
+/**
+ * Capture the on-screen card WYSIWYG, then upscale to 1080×1600.
+ *
+ * The preview is laid out inside max-w-[380px] with absolute rem/px type.
+ * Expanding CSS width to 1080px does NOT scale fonts — it leaves content
+ * tiny in the top-left. Instead, keep natural layout size and scale the
+ * clone so it fills the export canvas.
+ */
 async function renderCardBlob(
   source: HTMLElement,
   backgroundColor: string,
 ): Promise<Blob> {
   await waitForFontsReady();
   void source.offsetHeight;
+  assertShareFooterFits(source);
+
+  const layoutWidth = source.offsetWidth;
+  const layoutHeight = source.offsetHeight;
+  if (layoutWidth < 1 || layoutHeight < 1) {
+    throw new Error("Share card has no layout size to export");
+  }
+
+  const scale = SHARE_EXPORT_WIDTH / layoutWidth;
 
   const options = {
+    // Scale via CSS transform only — do not also bump pixelRatio.
     pixelRatio: 1,
     cacheBust: true,
     backgroundColor,
@@ -292,72 +302,31 @@ async function renderCardBlob(
     canvasWidth: SHARE_EXPORT_WIDTH,
     canvasHeight: SHARE_EXPORT_HEIGHT,
     style: {
-      width: `${SHARE_EXPORT_WIDTH}px`,
-      height: `${SHARE_EXPORT_HEIGHT}px`,
-      maxWidth: `${SHARE_EXPORT_WIDTH}px`,
-      minWidth: `${SHARE_EXPORT_WIDTH}px`,
-      minHeight: `${SHARE_EXPORT_HEIGHT}px`,
-      maxHeight: `${SHARE_EXPORT_HEIGHT}px`,
-      aspectRatio: SHARE_ASPECT,
-      transform: "none",
+      // Keep the preview layout box; scale it up into the 1080×1600 canvas.
+      width: `${layoutWidth}px`,
+      height: `${layoutHeight}px`,
+      maxWidth: `${layoutWidth}px`,
+      minWidth: `${layoutWidth}px`,
+      minHeight: `${layoutHeight}px`,
+      maxHeight: `${layoutHeight}px`,
+      margin: "0",
+      transform: `scale(${scale})`,
+      transformOrigin: "top left",
+    } as Partial<CSSStyleDeclaration>,
+    filter: (node: HTMLElement) => {
+      if (typeof node.hasAttribute === "function" && node.hasAttribute("data-export-hide")) {
+        return false;
+      }
+      return true;
     },
   };
 
-  // Preview sits in max-w-[380px]; lift nearby ancestors so live measure matches export size.
-  const unlock: Array<{ el: HTMLElement; css: Partial<CSSStyleDeclaration> }> = [];
-  let node: HTMLElement | null = source.parentElement;
-  for (let i = 0; i < 4 && node; i += 1) {
-    unlock.push({
-      el: node,
-      css: {
-        width: node.style.width,
-        maxWidth: node.style.maxWidth,
-        minWidth: node.style.minWidth,
-      },
-    });
-    node.style.width = `${SHARE_EXPORT_WIDTH}px`;
-    node.style.maxWidth = `${SHARE_EXPORT_WIDTH}px`;
-    node.style.minWidth = `${SHARE_EXPORT_WIDTH}px`;
-    node = node.parentElement;
-  }
+  await toPng(source, options);
+  await new Promise<void>((resolve) => window.setTimeout(resolve, 40));
 
-  const prev = {
-    width: source.style.width,
-    height: source.style.height,
-    maxWidth: source.style.maxWidth,
-    minWidth: source.style.minWidth,
-    minHeight: source.style.minHeight,
-    maxHeight: source.style.maxHeight,
-    aspectRatio: source.style.aspectRatio,
-    transform: source.style.transform,
-  };
-  Object.assign(source.style, options.style);
-  void source.offsetHeight;
-
-  try {
-    assertShareFooterFits(source);
-    await toPng(source, options);
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 40));
-    assertShareFooterFits(source);
-
-    const blob = await toBlob(source, options);
-    if (!blob) throw new Error("Failed to render image blob");
-    return blob;
-  } finally {
-    source.style.width = prev.width;
-    source.style.height = prev.height;
-    source.style.maxWidth = prev.maxWidth;
-    source.style.minWidth = prev.minWidth;
-    source.style.minHeight = prev.minHeight;
-    source.style.maxHeight = prev.maxHeight;
-    source.style.aspectRatio = prev.aspectRatio;
-    source.style.transform = prev.transform;
-    for (const { el, css } of unlock) {
-      el.style.width = css.width ?? "";
-      el.style.maxWidth = css.maxWidth ?? "";
-      el.style.minWidth = css.minWidth ?? "";
-    }
-  }
+  const blob = await toBlob(source, options);
+  if (!blob) throw new Error("Failed to render image blob");
+  return blob;
 }
 
 async function saveExportBlob(blob: Blob, filename: string) {
