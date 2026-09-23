@@ -35,11 +35,16 @@ export type ResultCardProps = Pick<
 > & {
   lang: ResultCardLang;
   onSaved?: () => void;
-  /** Dev mock only — forces a fixed session id on the card. */
   sessionIdOverride?: string;
-  /** Last valid run before this one (for subtle vs-last lines). */
   historyPrevious?: HistoryRun | null;
 };
+
+/** Fixed Save Image / Share canvas — compact content height (~1080×1600). */
+const SHARE_EXPORT_WIDTH = 1080;
+const SHARE_EXPORT_HEIGHT = 1600;
+const SHARE_ASPECT = `${SHARE_EXPORT_WIDTH} / ${SHARE_EXPORT_HEIGHT}`;
+/** Minimum space below QR / footer bottom edge inside the card. */
+const SHARE_FOOTER_SAFE_PAD = 12;
 
 const COPY = {
   zh: {
@@ -57,10 +62,13 @@ const COPY = {
       "準確率：色彩測試答對題數 ÷ 總題數，四捨五入至整數百分比。",
     reaction: "REACTION LATENCY",
     tier: "FOCUS TIER",
-    interference: "INTERFERENCE",
-    accuracy: "ACCURACY",
-    status: "FOCUS STATE",
+    interference: "INTERFERENCE LOSS",
+    accuracy: "FOCUS ACCURACY",
+    breath: "5-5 CALIBRATION",
+    status: "STATUS LABELS",
     qrHint: "試下你嘅反應速度",
+    protocolCalibrated: "已完成呼吸校準後測得",
+    protocolBaseline: "未經呼吸校準（基準測試）",
   },
   en: {
     brand: "MIND OS",
@@ -77,42 +85,39 @@ const COPY = {
       "Accuracy: correct color-trial responses ÷ total color trials, rounded to a whole-number percent.",
     reaction: "REACTION LATENCY",
     tier: "FOCUS TIER",
-    interference: "INTERFERENCE",
-    accuracy: "ACCURACY",
-    status: "FOCUS STATE",
+    interference: "INTERFERENCE LOSS",
+    accuracy: "FOCUS ACCURACY",
+    breath: "5-5 CALIBRATION",
+    status: "STATUS LABELS",
     qrHint: "Try your reaction speed",
+    protocolCalibrated: "Protocol: Post-Calibration (5-5)",
+    protocolBaseline: "Protocol: Baseline Direct",
   },
 } as const;
 
-function buildFocusMetricSummary(input: {
+function buildShareSummary(input: {
   lang: ResultCardLang;
   avgSrt: number;
   acc: number;
   previous: HistoryRun | null;
+  diagnosis: string;
 }): string {
-  const { lang, avgSrt, acc, previous } = input;
+  const { lang, avgSrt, acc, previous, diagnosis } = input;
   if (previous) {
     const delta = avgSrt - previous.reactionMs;
     if (lang === "zh") {
-      if (delta === 0) {
-        return `今次反應與上次相同，準確率 ${acc}%。`;
-      }
-      if (delta < 0) {
-        return `今次反應比上次快 ${Math.abs(delta)} ms，準確率 ${acc}%。`;
-      }
-      return `今次反應比上次慢 ${delta} ms，準確率 ${acc}%。`;
+      if (delta === 0) return `今次反應與上次相同，準確率維持 ${acc}%。`;
+      if (delta < 0) return `今次反應比上次快 ${Math.abs(delta)} ms，準確率維持 ${acc}%。`;
+      return `今次反應時間偏慢（慢 ${delta} ms），準確率維持 ${acc}%。`;
     }
-    if (delta === 0) {
-      return `Reaction matched last run. Accuracy ${acc}%.`;
-    }
-    if (delta < 0) {
-      return `${Math.abs(delta)} ms faster than last. Accuracy ${acc}%.`;
-    }
-    return `${delta} ms slower than last. Accuracy ${acc}%.`;
+    if (delta === 0) return `Reaction matched last run. Accuracy ${acc}%.`;
+    if (delta < 0) return `${Math.abs(delta)} ms faster than last. Accuracy ${acc}%.`;
+    return `Reaction slower by ${delta} ms. Accuracy ${acc}%.`;
   }
-  return lang === "zh"
+  // Fallback: short diagnosis already written for this run.
+  return diagnosis || (lang === "zh"
     ? `今次反應 ${avgSrt} ms，準確率 ${acc}%。`
-    : `Reaction ${avgSrt} ms · Accuracy ${acc}%.`;
+    : `Reaction ${avgSrt} ms · Accuracy ${acc}%.`);
 }
 
 function CmpLine({
@@ -127,7 +132,7 @@ function CmpLine({
   return (
     <p
       data-export-mono
-      className={`mt-1 font-mono text-[8px] leading-3 tracking-[0.04em] ${className}`}
+      className={`mt-0.5 font-mono text-[8px] leading-3 tracking-[0.04em] ${className}`}
     >
       <span className="mr-1 opacity-80">{arrow}</span>
       {label}
@@ -197,7 +202,7 @@ function DiamondGauge({
   );
 }
 
-function VoidHairline({ className = "my-3" }: { className?: string }) {
+function VoidHairline({ className = "my-2" }: { className?: string }) {
   return (
     <div
       aria-hidden
@@ -243,7 +248,34 @@ async function waitForFontsReady() {
   }
 }
 
-/** Capture the fixed 9:16 share card exactly as rendered. */
+/**
+ * Ensure footer / QR sit fully inside the export card (no clip).
+ * Measures after the card is forced to export pixel size.
+ */
+function assertShareFooterFits(source: HTMLElement) {
+  const cardRect = source.getBoundingClientRect();
+  if (Math.abs(cardRect.width - SHARE_EXPORT_WIDTH) > 2) {
+    // Still constrained by a parent — cannot trust geometry.
+    throw new Error(
+      `Share card not at export width (got ${cardRect.width.toFixed(0)}px, need ${SHARE_EXPORT_WIDTH}px)`,
+    );
+  }
+
+  const qr = source.querySelector<HTMLElement>("[data-export-qr]");
+  const footer = source.querySelector("footer");
+  const target = qr ?? footer;
+  if (!target) return;
+
+  const bottom = target.getBoundingClientRect().bottom;
+  const limit = cardRect.bottom - SHARE_FOOTER_SAFE_PAD;
+  if (bottom > limit + 0.5) {
+    throw new Error(
+      `Share card footer overflows export bounds (bottom ${bottom.toFixed(1)} > limit ${limit.toFixed(1)})`,
+    );
+  }
+}
+
+/** Capture share card as a fixed 1080×1600 PNG. */
 async function renderCardBlob(
   source: HTMLElement,
   backgroundColor: string,
@@ -251,29 +283,81 @@ async function renderCardBlob(
   await waitForFontsReady();
   void source.offsetHeight;
 
-  const rect = source.getBoundingClientRect();
-  const width = Math.ceil(rect.width);
-  const height = Math.ceil(rect.height);
-
   const options = {
-    pixelRatio: 3,
+    pixelRatio: 1,
     cacheBust: true,
     backgroundColor,
-    width,
-    height,
+    width: SHARE_EXPORT_WIDTH,
+    height: SHARE_EXPORT_HEIGHT,
+    canvasWidth: SHARE_EXPORT_WIDTH,
+    canvasHeight: SHARE_EXPORT_HEIGHT,
     style: {
-      width: `${width}px`,
-      height: `${height}px`,
+      width: `${SHARE_EXPORT_WIDTH}px`,
+      height: `${SHARE_EXPORT_HEIGHT}px`,
+      maxWidth: `${SHARE_EXPORT_WIDTH}px`,
+      minWidth: `${SHARE_EXPORT_WIDTH}px`,
+      minHeight: `${SHARE_EXPORT_HEIGHT}px`,
+      maxHeight: `${SHARE_EXPORT_HEIGHT}px`,
+      aspectRatio: SHARE_ASPECT,
       transform: "none",
     },
   };
 
-  await toPng(source, options);
-  await new Promise<void>((resolve) => window.setTimeout(resolve, 30));
+  // Preview sits in max-w-[380px]; lift nearby ancestors so live measure matches export size.
+  const unlock: Array<{ el: HTMLElement; css: Partial<CSSStyleDeclaration> }> = [];
+  let node: HTMLElement | null = source.parentElement;
+  for (let i = 0; i < 4 && node; i += 1) {
+    unlock.push({
+      el: node,
+      css: {
+        width: node.style.width,
+        maxWidth: node.style.maxWidth,
+        minWidth: node.style.minWidth,
+      },
+    });
+    node.style.width = `${SHARE_EXPORT_WIDTH}px`;
+    node.style.maxWidth = `${SHARE_EXPORT_WIDTH}px`;
+    node.style.minWidth = `${SHARE_EXPORT_WIDTH}px`;
+    node = node.parentElement;
+  }
 
-  const blob = await toBlob(source, options);
-  if (!blob) throw new Error("Failed to render image blob");
-  return blob;
+  const prev = {
+    width: source.style.width,
+    height: source.style.height,
+    maxWidth: source.style.maxWidth,
+    minWidth: source.style.minWidth,
+    minHeight: source.style.minHeight,
+    maxHeight: source.style.maxHeight,
+    aspectRatio: source.style.aspectRatio,
+    transform: source.style.transform,
+  };
+  Object.assign(source.style, options.style);
+  void source.offsetHeight;
+
+  try {
+    assertShareFooterFits(source);
+    await toPng(source, options);
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 40));
+    assertShareFooterFits(source);
+
+    const blob = await toBlob(source, options);
+    if (!blob) throw new Error("Failed to render image blob");
+    return blob;
+  } finally {
+    source.style.width = prev.width;
+    source.style.height = prev.height;
+    source.style.maxWidth = prev.maxWidth;
+    source.style.minWidth = prev.minWidth;
+    source.style.minHeight = prev.minHeight;
+    source.style.maxHeight = prev.maxHeight;
+    source.style.aspectRatio = prev.aspectRatio;
+    source.style.transform = prev.transform;
+    for (const { el, css } of unlock) {
+      el.style.width = css.width ?? "";
+      el.style.maxWidth = css.maxWidth ?? "";
+      el.style.minWidth = css.minWidth ?? "";
+    }
+  }
 }
 
 async function saveExportBlob(blob: Blob, filename: string) {
@@ -385,11 +469,16 @@ export default function ResultCard({
       : null;
   const showTierPath =
     historyPrevious !== null && historyPrevious.tier !== historyTierLabel;
-  const focusMetricSummary = buildFocusMetricSummary({
+
+  const protocolLabel = completedBreathingBeforeTest
+    ? t.protocolCalibrated
+    : t.protocolBaseline;
+  const shareSummary = buildShareSummary({
     lang,
     avgSrt,
     acc,
     previous: historyPrevious,
+    diagnosis: tier.diagnosis,
   });
 
   useEffect(() => {
@@ -462,6 +551,11 @@ export default function ResultCard({
     : isDarkCard
       ? "text-zinc-100"
       : "text-zinc-800";
+  const statusMono = isVoid
+    ? "text-zinc-400"
+    : isDarkCard
+      ? "text-slate-300"
+      : "text-zinc-700";
   const diagnosisTone = isVoid
     ? "text-zinc-400"
     : isDarkCard
@@ -474,12 +568,13 @@ export default function ResultCard({
       : "text-zinc-600";
 
   return (
-    <div className="mx-auto flex w-full max-w-[420px] flex-col items-center gap-4">
-      {/* Fixed 9:16 share card — 1080×1920 baseline */}
+    <div className="mx-auto flex w-full max-w-[380px] flex-col items-center gap-4">
+      {/* Fixed 1080×1600 share card — content flow, no footer stretch */}
       <div className="relative w-full">
         <div
           ref={cardRef}
-          className={`relative aspect-[9/16] w-full overflow-hidden ${
+          data-share-card
+          className={`relative flex w-full flex-col ${
             isCritical
               ? `${isExporting ? "" : "animate-pulse"} border border-red-900/80 bg-zinc-950 text-zinc-100 shadow-[0_0_25px_rgba(220,38,38,0.25)]`
               : isVoid
@@ -494,6 +589,7 @@ export default function ResultCard({
             boxShadow: isCritical || isVoid ? undefined : tier.cardShadow,
             backgroundColor: isVoid ? undefined : tier.cardBackground,
             opacity: isCritical && isExporting ? 1 : undefined,
+            aspectRatio: SHARE_ASPECT,
           }}
         >
           {isApex && !isVoid && tier.radialGlow ? (
@@ -506,13 +602,13 @@ export default function ResultCard({
 
           <div
             data-card-shell
-            className="absolute inset-0 z-[1] flex flex-col px-6 pb-8 pt-9 sm:px-7 sm:pb-9 sm:pt-10"
+            className="relative z-[1] flex w-full flex-col px-5 pb-12 pt-5"
           >
-            {/* 1. Header */}
+            {/* 1. HEADER */}
             <header
               data-card-block
-              className={`flex shrink-0 items-start justify-between gap-3 ${
-                isVoid ? "" : `border-b pb-3 ${rule}`
+              className={`flex shrink-0 items-start justify-between gap-2 ${
+                isVoid ? "" : `border-b pb-2 ${rule}`
               }`}
             >
               <div className="min-w-0">
@@ -527,7 +623,7 @@ export default function ResultCard({
                 </div>
                 <p
                   data-export-mono
-                  className={`mt-1 font-mono text-[8px] tracking-[0.22em] ${labelMuted}`}
+                  className={`mt-0.5 font-mono text-[8px] tracking-[0.22em] ${labelMuted}`}
                 >
                   {t.protocol}
                 </p>
@@ -541,20 +637,20 @@ export default function ResultCard({
                 </p>
                 <p
                   data-export-mono
-                  className={`mt-1 font-mono text-[8px] tracking-[0.14em] ${sessionTone}`}
+                  className={`mt-0.5 font-mono text-[8px] tracking-[0.14em] ${sessionTone}`}
                 >
                   {sessionId}
                 </p>
               </div>
             </header>
-            {isVoid ? <VoidHairline className="my-2.5" /> : null}
+            {isVoid ? <VoidHairline className="my-1.5" /> : null}
 
-            {/* 2. Primary metric — Reaction */}
-            <section data-card-block className="mt-4 shrink-0">
+            {/* 2. REACTION LATENCY */}
+            <section data-card-block className="mt-2.5 shrink-0">
               <div className="flex items-center justify-between gap-2">
                 <p
                   data-export-label
-                  className={`text-[7px] font-medium uppercase tracking-[0.24em] ${labelMuted}`}
+                  className={`text-[7px] font-medium uppercase tracking-[0.22em] ${labelMuted}`}
                 >
                   {t.reaction}
                 </p>
@@ -567,11 +663,11 @@ export default function ResultCard({
               </div>
               <p
                 data-export-latency
-                className={`mt-1.5 font-mono font-medium leading-none tracking-tight ${
+                className={`mt-1 font-mono font-medium leading-none tracking-tight ${
                   isVoid
                     ? "text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]"
                     : metricPrimary
-                } text-[4.25rem] sm:text-[4.75rem]`}
+                } text-[3.25rem]`}
                 style={{
                   fontFamily: "var(--font-geist-mono), ui-monospace, monospace",
                   filter: isVoid ? undefined : tier.latencyFilter ?? undefined,
@@ -580,7 +676,7 @@ export default function ResultCard({
                 {avgSrt}
                 <span
                   data-export-latency-unit
-                  className={`ml-1.5 align-baseline font-sans text-sm font-normal tracking-[0.16em] ${
+                  className={`ml-1.5 align-baseline font-sans text-xs font-normal tracking-[0.14em] ${
                     isVoid
                       ? "text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]"
                       : labelMuted
@@ -597,11 +693,11 @@ export default function ResultCard({
                 />
               ) : null}
               {isVoid ? (
-                <VoidHairline className="mt-3 mb-0" />
+                <VoidHairline className="mt-2 mb-0" />
               ) : (
                 <div
                   data-export-bar
-                  className="mt-3 h-[2px] w-full overflow-hidden"
+                  className="mt-2 h-[2px] w-full"
                   style={{ backgroundColor: tier.accentSoft }}
                 >
                   <div
@@ -616,19 +712,37 @@ export default function ResultCard({
               )}
             </section>
 
-            {/* 3. Focus Tier + plain status */}
-            <section data-card-block className="mt-3.5 shrink-0">
-              <div className="flex items-center justify-between gap-2">
-                <p
-                  data-export-label
-                  className={`text-[7px] uppercase tracking-[0.22em] ${labelMuted}`}
+            {/* 3. FOCUS TIER */}
+            <section data-card-block className="mt-2 shrink-0">
+              <p
+                data-export-label
+                className={`text-[7px] uppercase tracking-[0.2em] ${labelMuted}`}
+              >
+                {t.tier}
+              </p>
+              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span
+                  className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+                  style={{
+                    background: isVoid
+                      ? "#fff"
+                      : (tier.spectrumGradient ?? tier.accent),
+                    backgroundColor: isVoid ? "#fff" : tier.accent,
+                    boxShadow: isVoid
+                      ? "0 0 8px rgba(255,255,255,0.7)"
+                      : tier.glow,
+                  }}
+                />
+                <span
+                  data-export-title
+                  className={`min-w-0 truncate text-[13px] font-medium tracking-wide ${titleTone}`}
                 >
-                  {t.tier}
-                </p>
+                  {isVoid ? "MONOCHROME VOID" : tier.title}
+                </span>
                 <span
                   data-export-pill
-                  className={`shrink-0 px-2 py-0.5 font-mono text-[8px] tracking-[0.1em] ${
-                    isApex || isVoid ? "rounded-sm border-2" : "rounded-full border"
+                  className={`shrink-0 px-1.5 py-0.5 font-mono text-[7px] tracking-[0.08em] ${
+                    isApex || isVoid ? "rounded-sm border" : "rounded-full border"
                   }`}
                   style={{
                     borderColor: isVoid
@@ -642,35 +756,13 @@ export default function ResultCard({
                   {tier.percentLabel}
                 </span>
               </div>
-              <div className="mt-1.5 flex min-w-0 items-center gap-2">
-                <span
-                  className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
-                  style={{
-                    background: isVoid
-                      ? "#fff"
-                      : (tier.spectrumGradient ?? tier.accent),
-                    backgroundColor: isVoid ? "#fff" : tier.accent,
-                    boxShadow: isVoid
-                      ? "0 0 8px rgba(255,255,255,0.7)"
-                      : tier.glow,
-                  }}
-                />
-                <p
-                  data-export-title
-                  className={`min-w-0 truncate text-[15px] font-medium tracking-wide ${titleTone}`}
-                >
-                  {isVoid ? "MONOCHROME VOID" : tier.title}
-                </p>
-              </div>
-              <p
-                className={`mt-1 text-[13px] leading-snug tracking-wide ${diagnosisTone}`}
-              >
+              <p className={`mt-0.5 text-[11px] leading-snug ${diagnosisTone}`}>
                 {tier.focusPlain}
               </p>
               {!isVoid ? (
                 <p
                   data-export-mono
-                  className={`mt-1 font-mono text-[8px] tracking-[0.18em] ${labelMuted}`}
+                  className={`mt-0.5 font-mono text-[7px] tracking-[0.16em] ${labelMuted}`}
                 >
                   {tier.titleEn}
                 </p>
@@ -678,7 +770,7 @@ export default function ResultCard({
               {showTierPath && historyPrevious ? (
                 <p
                   data-export-mono
-                  className={`mt-1 font-mono text-[8px] tracking-[0.12em] ${cmpTone}`}
+                  className={`mt-0.5 font-mono text-[7px] tracking-[0.1em] ${cmpTone}`}
                 >
                   {historyPrevious.tier}
                   <span className="mx-1 opacity-60">→</span>
@@ -687,28 +779,28 @@ export default function ResultCard({
               ) : null}
             </section>
 
-            {/* 4. Secondary metrics */}
+            {/* 4. SECONDARY METRICS */}
             <section
               data-card-block
-              className={`mt-3.5 grid shrink-0 grid-cols-2 gap-4 border-y py-3.5 ${rule}`}
+              className={`mt-2 grid shrink-0 grid-cols-2 gap-3 border-y py-2 ${rule}`}
             >
               <div className="min-w-0">
                 <p
                   data-export-label
-                  className={`text-[7px] uppercase tracking-[0.2em] ${labelMuted}`}
+                  className={`text-[7px] uppercase tracking-[0.18em] ${labelMuted}`}
                 >
                   {t.interference}
                 </p>
                 <p
                   data-export-metric
-                  className={`mt-1 font-mono text-[1.65rem] leading-none tracking-tight ${metricPrimary}`}
+                  className={`mt-0.5 font-mono text-[1.35rem] leading-none tracking-tight ${metricPrimary}`}
                   style={{
                     fontFamily: "var(--font-geist-mono), ui-monospace, monospace",
                   }}
                 >
                   {lossDisplay}
                   <span
-                    className={`ml-1 font-sans text-[9px] tracking-[0.14em] ${labelMuted}`}
+                    className={`ml-1 font-sans text-[8px] tracking-[0.12em] ${labelMuted}`}
                   >
                     ms
                   </span>
@@ -720,7 +812,7 @@ export default function ResultCard({
                     className={cmpTone}
                   />
                 ) : (
-                  <p className={`mt-1.5 truncate text-[9px] leading-3 ${metricSub}`}>
+                  <p className={`mt-0.5 truncate text-[8px] leading-3 ${metricSub}`}>
                     {tier.interferenceLabel}
                   </p>
                 )}
@@ -728,20 +820,20 @@ export default function ResultCard({
               <div className="min-w-0">
                 <p
                   data-export-label
-                  className={`text-[7px] uppercase tracking-[0.2em] ${labelMuted}`}
+                  className={`text-[7px] uppercase tracking-[0.18em] ${labelMuted}`}
                 >
                   {t.accuracy}
                 </p>
                 <p
                   data-export-metric
-                  className={`mt-1 font-mono text-[1.65rem] leading-none tracking-tight ${metricPrimary}`}
+                  className={`mt-0.5 font-mono text-[1.35rem] leading-none tracking-tight ${metricPrimary}`}
                   style={{
                     fontFamily: "var(--font-geist-mono), ui-monospace, monospace",
                   }}
                 >
                   {acc}
                   <span
-                    className={`ml-1 font-sans text-[9px] tracking-[0.14em] ${labelMuted}`}
+                    className={`ml-1 font-sans text-[8px] tracking-[0.12em] ${labelMuted}`}
                   >
                     %
                   </span>
@@ -753,93 +845,92 @@ export default function ResultCard({
                     className={cmpTone}
                   />
                 ) : (
-                  <p className={`mt-1.5 text-[9px] leading-3 ${metricSub}`}>ACC</p>
+                  <p className={`mt-0.5 text-[8px] leading-3 ${metricSub}`}>ACC</p>
                 )}
               </div>
             </section>
 
-            {/* 5. Focus State — breath code + plain meaning */}
-            <section
-              data-card-block
-              className={`mt-3.5 shrink-0 ${
-                isApex || isCritical
-                  ? `rounded-lg border px-3 py-2.5 ${
-                      isCritical
-                        ? "border-red-900/50 bg-zinc-900/80"
-                        : isVoid
-                          ? "border-zinc-700/50 bg-black/40"
-                          : "border-zinc-800 bg-zinc-900/60"
-                    }`
-                  : ""
-              }`}
-            >
+            {/* 5. CALIBRATION + DRIFT — compressed */}
+            <section data-card-block className="mt-2 shrink-0">
               <p
                 data-export-label
-                className={`text-[7px] uppercase tracking-[0.2em] ${labelMuted}`}
+                className={`text-[7px] uppercase tracking-[0.18em] ${labelMuted}`}
               >
-                {t.status}
+                {t.breath}
               </p>
-              <div className="mt-1.5 flex items-baseline justify-between gap-3">
+              <div className="mt-1 flex items-end justify-between gap-2">
                 <p
                   data-export-metric
-                  className="font-mono text-xl tracking-tight"
-                  style={
-                    isVoid
-                      ? {
-                          fontFamily:
-                            "var(--font-geist-mono), ui-monospace, monospace",
-                          color: "#e4e4e7",
-                        }
-                      : {
-                          fontFamily:
-                            "var(--font-geist-mono), ui-monospace, monospace",
-                          color: tier.accent,
-                          textShadow: isApex
-                            ? `0 0 12px ${tier.accentSoft}`
-                            : undefined,
-                        }
-                  }
+                  className="font-mono text-[1.15rem] leading-none tracking-tight"
+                  style={{
+                    fontFamily: "var(--font-geist-mono), ui-monospace, monospace",
+                    color: isVoid ? "#e4e4e7" : tier.accent,
+                    textShadow:
+                      isApex && !isVoid
+                        ? `0 0 12px ${tier.accentSoft}`
+                        : undefined,
+                  }}
                 >
                   {tier.breathLabel}
                 </p>
+                <DiamondGauge
+                  filled={tier.diamondFilled}
+                  color={tier.accent}
+                  spectrumColors={isVoid ? null : tier.diamondColors}
+                  voidMode={isVoid}
+                />
+              </div>
+            </section>
+
+            {/* 6. STATUS LABELS — significantly compressed */}
+            <section data-card-block className="mt-2 shrink-0">
+              <p
+                data-export-label
+                className={`text-[7px] uppercase tracking-[0.18em] ${labelMuted}`}
+              >
+                {t.status}
+              </p>
+              <div className="mt-1 space-y-0">
                 <p
-                  data-export-title
-                  className={`min-w-0 truncate text-right text-[13px] tracking-wide ${titleTone}`}
+                  data-export-mono
+                  className={`font-mono text-[10px] leading-4 tracking-[0.04em] ${statusMono}`}
                 >
-                  {tier.focusPlain}
+                  {tier.statusPrimary}
+                </p>
+                <p
+                  data-export-mono
+                  className={`font-mono text-[10px] leading-4 tracking-[0.04em] ${statusMono}`}
+                >
+                  {tier.statusSecondary}
+                </p>
+                <p
+                  data-export-mono
+                  className={`font-mono text-[10px] leading-4 tracking-[0.04em] ${statusMono}`}
+                >
+                  {protocolLabel}
                 </p>
               </div>
-              {/* 6. Short read — 1–2 lines */}
               <p
                 data-export-body
-                className={`mt-2 text-[11px] leading-4 ${diagnosisTone}`}
+                className={`mt-1.5 text-[10px] leading-snug ${diagnosisTone}`}
               >
-                {tier.diagnosis}
-              </p>
-              <p
-                data-export-body
-                className={`mt-1 text-[11px] leading-4 ${diagnosisTone}`}
-              >
-                {focusMetricSummary}
+                {shareSummary}
               </p>
               {tier.sessionNote ? (
                 <p
                   data-export-body
-                  className={`mt-1.5 font-mono text-[8px] tracking-[0.1em] ${labelMuted}`}
+                  className={`mt-0.5 font-mono text-[7px] tracking-[0.08em] ${labelMuted}`}
                 >
                   {tier.sessionNote}
                 </p>
               ) : null}
             </section>
 
-            {/* Spacer pushes footer to bottom of 9:16 frame */}
-            <div className="min-h-3 flex-1" aria-hidden />
-
-            {/* 7. Footer — URL + QR / signature */}
+            {/* 7. FOOTER — normal flow after status (~56px gap), not pinned to canvas bottom */}
             {isVoid ? (
               <footer
                 data-card-block
-                className="flex w-full shrink-0 items-end justify-between gap-3 pt-2"
+                className="mt-14 flex w-full shrink-0 items-end justify-between gap-3 border-t border-zinc-700/60 pt-2.5"
               >
                 <span className="font-mono text-[8px] text-zinc-500">
                   {PUBLIC_HOST}
@@ -849,32 +940,31 @@ export default function ResultCard({
             ) : (
               <footer
                 data-card-block
-                className={`flex shrink-0 items-end justify-between gap-3 border-t pt-3 ${rule}`}
+                className={`mt-14 flex shrink-0 items-end justify-between gap-3 border-t pt-2.5 ${rule}`}
               >
-                <div className="min-w-0">
+                <p
+                  data-export-label
+                  className={`min-w-0 text-[8px] tracking-[0.16em] ${labelMuted}`}
+                >
+                  {PUBLIC_HOST}
+                </p>
+                <div className="flex shrink-0 flex-col items-end gap-0.5">
                   <p
-                    data-export-label
-                    className={`text-[8px] tracking-[0.18em] ${labelMuted}`}
+                    className={`whitespace-nowrap text-right text-[7px] leading-tight tracking-wide ${labelMuted}`}
                   >
-                    {PUBLIC_HOST}
-                  </p>
-                  <p className={`mt-1 text-[7px] tracking-wide ${labelMuted}`}>
                     {t.qrHint}
                   </p>
-                </div>
-                <div
-                  className="h-11 w-11 shrink-0 overflow-hidden"
-                  data-export-qr
-                >
-                  <QRCodeCanvas
-                    value={shareUrl}
-                    size={44}
-                    level="M"
-                    marginSize={1}
-                    bgColor="transparent"
-                    fgColor={isDarkCard ? "#ffffff" : "#0F1115"}
-                    className="block"
-                  />
+                  <div className="h-10 w-10 shrink-0" data-export-qr>
+                    <QRCodeCanvas
+                      value={shareUrl}
+                      size={40}
+                      level="M"
+                      marginSize={1}
+                      bgColor="transparent"
+                      fgColor={isDarkCard ? "#ffffff" : "#0F1115"}
+                      className="block"
+                    />
+                  </div>
                 </div>
               </footer>
             )}
