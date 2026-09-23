@@ -28,6 +28,8 @@ export type TierConfig = {
   title: string;
   titleEn: string;
   percentLabel: string;
+  /** Plain-language focus meaning shown before the branded title. */
+  focusPlain: string;
   statusPrimary: string;
   statusSecondary: string;
   diagnosis: string;
@@ -234,6 +236,7 @@ export function getTierConfig(data: TierInput): TierConfig {
       title: "TIER 00X · MONOCHROME VOID",
       titleEn: "TIER 00X · MONOCHROME VOID",
       percentLabel: "TITANIUM PURITY · TOP 0.01%",
+      focusPlain: isZh ? "極致同步" : "Peak sync",
       statusPrimary: "Trapezius: Deep Released",
       statusSecondary: "Focus Index: Titanium Purity",
       diagnosis: isZh
@@ -269,6 +272,7 @@ export function getTierConfig(data: TierInput): TierConfig {
       title: isZh ? "系統超頻" : "System Overclock",
       titleEn: "TIER 00",
       percentLabel: preset.percentLabel,
+      focusPlain: isZh ? "狀態極佳" : "Peak form",
       statusPrimary: "Trapezius: Deep Released",
       statusSecondary: "Focus Index: Top 1%",
       diagnosis: isZh
@@ -301,6 +305,7 @@ export function getTierConfig(data: TierInput): TierConfig {
       title: isZh ? "超感同步" : "Hyper Sync",
       titleEn: "TIER 01",
       percentLabel: "TOP 5%",
+      focusPlain: isZh ? "反應很快" : "Very sharp",
       statusPrimary: "Trapezius: Decompressed",
       statusSecondary: "Focus Index: Top 5%",
       diagnosis: isZh
@@ -329,6 +334,7 @@ export function getTierConfig(data: TierInput): TierConfig {
       title: isZh ? "敏銳清晰" : "Sharp Clarity",
       titleEn: "TIER 02",
       percentLabel: "TOP 30%",
+      focusPlain: isZh ? "表現穩定" : "Steady run",
       statusPrimary: "Trapezius: Neutral",
       statusSecondary: "Focus Index: Top 30%",
       diagnosis: isZh
@@ -357,6 +363,7 @@ export function getTierConfig(data: TierInput): TierConfig {
       title: isZh ? "負載偏高" : "Elevated Load",
       titleEn: "TIER 03",
       percentLabel: "TOP 60%",
+      focusPlain: isZh ? "有啲慢熱" : "A bit off",
       statusPrimary: "Trapezius: Elevated",
       statusSecondary: "Focus Index: Baseline",
       diagnosis: isZh
@@ -384,6 +391,7 @@ export function getTierConfig(data: TierInput): TierConfig {
     title: isZh ? "赤紅脈衝" : "Crimson Impulse",
     titleEn: "TIER 04",
     percentLabel: "RECHARGE",
+    focusPlain: isZh ? "需要回氣" : "Needs a reset",
     statusPrimary: "Trapezius: Guarded",
     statusSecondary: "Focus Index: Recharge",
     diagnosis: isZh

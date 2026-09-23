@@ -63,7 +63,7 @@ const COPY = {
     interference: "INTERFERENCE LOSS",
     accuracy: "FOCUS ACCURACY",
     breath: "5-5 CALIBRATION",
-    status: "STATUS LABELS",
+    status: "FOCUS STATE",
     qrHint: "試下你嘅反應速度",
   },
   en: {
@@ -86,10 +86,41 @@ const COPY = {
     interference: "INTERFERENCE LOSS",
     accuracy: "FOCUS ACCURACY",
     breath: "5-5 CALIBRATION",
-    status: "STATUS LABELS",
+    status: "FOCUS STATE",
     qrHint: "Try your reaction speed",
   },
 } as const;
+
+function buildFocusMetricSummary(input: {
+  lang: ResultCardLang;
+  avgSrt: number;
+  acc: number;
+  previous: HistoryRun | null;
+}): string {
+  const { lang, avgSrt, acc, previous } = input;
+  if (previous) {
+    const delta = avgSrt - previous.reactionMs;
+    if (lang === "zh") {
+      if (delta === 0) {
+        return `今次反應時間與上次相同（${avgSrt} ms），作答準確率 ${acc}%。`;
+      }
+      if (delta < 0) {
+        return `今次反應時間比上次快 ${Math.abs(delta)} ms，作答準確率 ${acc}%。`;
+      }
+      return `今次反應時間比上次慢 ${delta} ms，作答準確率 ${acc}%。`;
+    }
+    if (delta === 0) {
+      return `Reaction matched last run (${avgSrt} ms). Accuracy ${acc}%.`;
+    }
+    if (delta < 0) {
+      return `Reaction was ${Math.abs(delta)} ms faster than last run. Accuracy ${acc}%.`;
+    }
+    return `Reaction was ${delta} ms slower than last run. Accuracy ${acc}%.`;
+  }
+  return lang === "zh"
+    ? `今次反應時間 ${avgSrt} ms，作答準確率 ${acc}%。`
+    : `This run: reaction ${avgSrt} ms, accuracy ${acc}%.`;
+}
 
 function CmpLine({
   arrow,
@@ -226,17 +257,48 @@ async function waitForFontsReady() {
   }
 }
 
-/** Capture the on-screen card node as-is (WYSIWYG). */
+/** Capture the on-screen card node as-is (WYSIWYG), using full content height. */
 async function renderCardBlob(
   source: HTMLElement,
   backgroundColor: string,
 ): Promise<Blob> {
   await waitForFontsReady();
 
+  // Force a layout pass, then measure the full unclipped content box.
+  void source.offsetHeight;
+  const shell = source.querySelector<HTMLElement>("[data-card-shell]");
+  const width = Math.ceil(
+    Math.max(
+      source.getBoundingClientRect().width,
+      source.scrollWidth,
+      shell?.scrollWidth ?? 0,
+    ),
+  );
+  const height = Math.ceil(
+    Math.max(
+      source.scrollHeight,
+      source.offsetHeight,
+      source.getBoundingClientRect().height,
+      shell?.scrollHeight ?? 0,
+      shell?.offsetHeight ?? 0,
+    ),
+  );
+
   const options = {
     pixelRatio: 3,
     cacheBust: true,
     backgroundColor,
+    width,
+    height,
+    style: {
+      width: `${width}px`,
+      height: `${height}px`,
+      minHeight: `${height}px`,
+      overflow: "visible",
+      // Neutralize aspect constraints that can clip the export clone.
+      aspectRatio: "auto",
+      minAspectRatio: "auto",
+    },
   };
 
   await toPng(source, options);
@@ -323,14 +385,6 @@ export default function ResultCard({
       }),
     [acc, apexVariant, avgSrt, completedBreathingBeforeTest, interference, lang],
   );
-  const protocolLabel =
-    lang === "zh"
-      ? completedBreathingBeforeTest
-        ? "已完成呼吸校準後測得"
-        : "未經呼吸校準（基準測試）"
-      : completedBreathingBeforeTest
-        ? "Protocol: Post-Calibration (5-5)"
-        : "Protocol: Baseline Direct";
   const sessionId = useMemo(
     () => sessionIdOverride ?? buildSessionId(avgSrt, interference, acc, reportAt),
     [acc, avgSrt, interference, reportAt, sessionIdOverride],
@@ -411,6 +465,15 @@ export default function ResultCard({
     !isMinimal &&
     historyPrevious !== null &&
     historyPrevious.tier !== historyTierLabel;
+  const brandedFocusLabel = isVoid
+    ? tier.title
+    : `${tier.title} · ${tier.percentLabel}`;
+  const focusMetricSummary = buildFocusMetricSummary({
+    lang,
+    avgSrt,
+    acc,
+    previous: historyPrevious,
+  });
   const labelMuted = isVoid
     ? "text-zinc-400"
     : isDarkCard
@@ -493,7 +556,7 @@ export default function ResultCard({
       <div className="relative w-full">
         <div
           ref={cardRef}
-          className={`relative aspect-[9/16] w-full overflow-hidden ${
+          className={`relative w-full overflow-visible [min-aspect-ratio:9/16] ${
             isCritical
               ? `${isExporting ? "" : "animate-pulse"} border border-red-900/80 bg-zinc-950 text-zinc-100 shadow-[0_0_25px_rgba(220,38,38,0.25)]`
               : isVoid
@@ -521,10 +584,10 @@ export default function ResultCard({
 
           <div
             data-card-shell
-            className={`absolute inset-0 z-[1] flex h-full min-h-0 flex-col justify-between ${
+            className={`relative z-[1] flex min-h-full w-full flex-col ${
               isMinimal
                 ? "gap-6 px-8 py-10 sm:gap-8 sm:px-9 sm:py-12"
-                : "px-7 py-8 sm:px-8 sm:py-9"
+                : "gap-0 px-7 py-8 sm:px-8 sm:py-9"
             }`}
           >
             <header
@@ -873,7 +936,7 @@ export default function ResultCard({
             {!isMinimal ? (
               <section
                 data-card-block
-                className={`min-h-0 shrink overflow-hidden ${
+                className={`mt-4 shrink-0 ${
                   isApex || isCritical
                     ? `rounded-lg border px-3 py-3 ${
                         isCritical
@@ -891,31 +954,23 @@ export default function ResultCard({
                 >
                   {t.status}
                 </p>
-                <div className={isVoid ? "mt-2 space-y-1.5" : "mt-3 space-y-2"}>
-                  <p
-                    data-export-mono
-                    className={`font-mono text-[11px] tracking-[0.08em] ${statusMono}`}
-                  >
-                    {tier.statusPrimary}
-                  </p>
-                  <p
-                    data-export-mono
-                    className={`font-mono text-[11px] tracking-[0.08em] ${statusMono}`}
-                  >
-                    {tier.statusSecondary}
-                  </p>
-                  <p
-                    data-export-mono
-                    className={`font-mono text-[11px] tracking-[0.08em] ${statusMono}`}
-                  >
-                    {protocolLabel}
-                  </p>
-                </div>
+                <p
+                  data-export-title
+                  className={`mt-3 text-base font-medium tracking-wide ${titleTone}`}
+                >
+                  {tier.focusPlain}
+                </p>
+                <p
+                  data-export-mono
+                  className={`mt-1.5 font-mono text-[11px] tracking-[0.12em] ${statusMono}`}
+                >
+                  {brandedFocusLabel}
+                </p>
                 <p
                   data-export-body
-                  className={`${isVoid ? "mt-2" : "mt-4"} text-[12px] leading-5 ${diagnosisTone}`}
+                  className={`mt-4 whitespace-pre-line text-[12px] leading-5 ${diagnosisTone}`}
                 >
-                  {tier.diagnosis}
+                  {focusMetricSummary}
                 </p>
                 {tier.diagnosisSupport ? (
                   <p
@@ -936,14 +991,15 @@ export default function ResultCard({
               </section>
             ) : null}
 
-            {isVoid ? <VoidHairline className="my-2" /> : null}
+            {/* Guaranteed gap between content and footer (40px). */}
+            <div aria-hidden className="h-10 w-full shrink-0" />
+
+            {isVoid ? <VoidHairline className="mb-0" /> : null}
 
             {isVoid ? (
               <footer
                 data-card-block
-                className={`flex w-full shrink-0 items-end justify-between pl-2 pr-4 ${
-                  isMinimal ? "pt-5" : "pt-3"
-                }`}
+                className="mt-auto flex w-full shrink-0 items-end justify-between pl-2 pr-4 pt-3"
               >
                 <span className="font-mono text-[9px] text-zinc-500">
                   {PUBLIC_HOST}
@@ -953,9 +1009,7 @@ export default function ResultCard({
             ) : (
               <footer
                 data-card-block
-                className={`flex shrink-0 items-end justify-between gap-3 border-t ${rule} ${
-                  isMinimal ? "pt-5" : "pt-4"
-                }`}
+                className={`mt-auto flex shrink-0 items-end justify-between gap-3 border-t pt-4 ${rule}`}
               >
                 <p
                   data-export-label
