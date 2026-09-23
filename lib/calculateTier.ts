@@ -204,13 +204,13 @@ function emptyApexFields() {
 }
 
 const SESSION_NOTE = {
-  zh: "單次結果只反映今次作答表現。",
-  en: "This result reflects this run only.",
+  zh: "僅反映今次表現。",
+  en: "This run only.",
 } as const;
 
 const RETEST_SUPPORT = {
-  zh: "如果測試期間有分心、中斷或裝置延遲，可以再測一次。",
-  en: "If you were distracted, interrupted, or hit device lag, try another run.",
+  zh: "分心或裝置延遲時，可再測一次。",
+  en: "Distracted or laggy? Try again.",
 } as const;
 
 /** Map Latency + Interference + Accuracy (+ breath calibration) → linked visual / system state. */
@@ -240,8 +240,8 @@ export function getTierConfig(data: TierInput): TierConfig {
       statusPrimary: "Trapezius: Deep Released",
       statusSecondary: "Focus Index: Titanium Purity",
       diagnosis: isZh
-        ? "今次 run 進入罕見的單色峰值態。Signal 極乾淨，干擾趨近於零。"
-        : "This run hit a rare monochrome peak. Signal is clean — interference near zero.",
+        ? "今次訊號極乾淨，干擾趨近於零。"
+        : "Signal is clean — interference near zero.",
       diagnosisSupport: null,
       sessionNote,
       interferenceLabel: "Zero Interference",
@@ -276,8 +276,8 @@ export function getTierConfig(data: TierInput): TierConfig {
       statusPrimary: "Trapezius: Deep Released",
       statusSecondary: "Focus Index: Top 1%",
       diagnosis: isZh
-        ? "今次 reaction engine 完全對齊，干擾損耗趨近於零。系統處於極佳同步。"
-        : "This run’s reaction engine locked in sync. Interference loss near zero — peak alignment.",
+        ? "今次反應引擎完全對齊，干擾趨近於零。"
+        : "Reaction engine locked in sync. Interference near zero.",
       diagnosisSupport: null,
       sessionNote,
       interferenceLabel: "Zero Interference",
@@ -309,8 +309,8 @@ export function getTierConfig(data: TierInput): TierConfig {
       statusPrimary: "Trapezius: Decompressed",
       statusSecondary: "Focus Index: Top 5%",
       diagnosis: isZh
-        ? "今次 response latency 很低，衝突抑制維持在低損耗區間。"
-        : "This run’s response latency was low. Conflict filtering stayed in the low-loss band.",
+        ? "今次反應很快，干擾維持在低水平。"
+        : "Fast reaction this run. Interference stayed low.",
       diagnosisSupport: null,
       sessionNote,
       interferenceLabel: isZh ? "極低干擾" : "High Resilience",
@@ -338,8 +338,8 @@ export function getTierConfig(data: TierInput): TierConfig {
       statusPrimary: "Trapezius: Neutral",
       statusSecondary: "Focus Index: Top 30%",
       diagnosis: isZh
-        ? "今次表現穩陣，filtering 在正常區間內運作。"
-        : "This run was solid. Filtering stayed stable within range.",
+        ? "今次表現穩陣，屬正常區間。"
+        : "Solid run — within a normal range.",
       diagnosisSupport: null,
       sessionNote,
       interferenceLabel: isZh ? "平衡抑制" : "Balanced Control",
@@ -367,8 +367,8 @@ export function getTierConfig(data: TierInput): TierConfig {
       statusPrimary: "Trapezius: Elevated",
       statusSecondary: "Focus Index: Baseline",
       diagnosis: isZh
-        ? "今日個引擎仲未完全 warm up。Signal 有啲亂，但唔代表系統壞咗。"
-        : "Today’s engine hasn’t fully warmed up. Signal is a bit noisy — that doesn’t mean the system is broken.",
+        ? "今次有啲慢熱，但唔代表系統壞咗。"
+        : "A bit slow to warm up — not a broken system.",
       diagnosisSupport: retestSupport,
       sessionNote,
       interferenceLabel: isZh ? "中度干擾" : "Moderate Load",
@@ -395,8 +395,8 @@ export function getTierConfig(data: TierInput): TierConfig {
     statusPrimary: "Trapezius: Guarded",
     statusSecondary: "Focus Index: Recharge",
     diagnosis: isZh
-      ? "呢次 run 似乎唔係最佳狀態。今次 response latency 偏高，signal 未完全對齊。"
-      : "This run doesn’t look like peak form. Response latency ran high and signal alignment slipped.",
+      ? "今次反應偏慢，建議再測一次。"
+      : "Slower reaction this run. Worth another pass.",
     diagnosisSupport: retestSupport,
     sessionNote,
     interferenceLabel:
