@@ -269,12 +269,39 @@ function assertShareFooterFits(source: HTMLElement) {
 }
 
 /**
- * Capture the on-screen card WYSIWYG, then upscale to 1080×1600.
+ * On-screen card box, including content that stretches the box past the
+ * 1080:1600 aspect ratio. A narrow phone width keeps absolute type sizes, so the
+ * card grows taller than width × 1600/1080. offsetHeight already includes
+ * that growth in Chrome; shell bottom covers browsers that keep the ratio box.
+ */
+function measureShareLayout(source: HTMLElement) {
+  const layoutWidth = source.offsetWidth;
+  const cardTop = source.getBoundingClientRect().top;
+  const shell = source.querySelector<HTMLElement>("[data-card-shell]");
+  const shellExtent = shell ? shell.getBoundingClientRect().bottom - cardTop : 0;
+  const layoutHeight = Math.max(
+    source.offsetHeight,
+    source.scrollHeight,
+    Math.ceil(shellExtent),
+  );
+  return { layoutWidth, layoutHeight };
+}
+
+/** Canvas height for a width-fit scale. Desktop stays 1600; narrower layouts grow. */
+function shareExportHeight(layoutWidth: number, layoutHeight: number) {
+  const scaled = layoutHeight * (SHARE_EXPORT_WIDTH / layoutWidth);
+  if (Math.abs(scaled - SHARE_EXPORT_HEIGHT) <= 2) return SHARE_EXPORT_HEIGHT;
+  return Math.ceil(scaled);
+}
+
+/**
+ * Capture the on-screen card WYSIWYG, then upscale to 1080px wide.
  *
  * The preview is laid out inside max-w-[380px] with absolute rem/px type.
  * Expanding CSS width to 1080px does NOT scale fonts — it leaves content
  * tiny in the top-left. Instead, keep natural layout size and scale the
- * clone so it fills the export canvas.
+ * clone so it fills the export canvas. Height follows the measured card,
+ * so a taller mobile layout is not cropped to 1600.
  */
 async function renderCardBlob(
   source: HTMLElement,
@@ -284,13 +311,13 @@ async function renderCardBlob(
   void source.offsetHeight;
   assertShareFooterFits(source);
 
-  const layoutWidth = source.offsetWidth;
-  const layoutHeight = source.offsetHeight;
+  const { layoutWidth, layoutHeight } = measureShareLayout(source);
   if (layoutWidth < 1 || layoutHeight < 1) {
     throw new Error("Share card has no layout size to export");
   }
 
   const scale = SHARE_EXPORT_WIDTH / layoutWidth;
+  const exportHeight = shareExportHeight(layoutWidth, layoutHeight);
 
   const options = {
     // Scale via CSS transform only — do not also bump pixelRatio.
@@ -298,11 +325,11 @@ async function renderCardBlob(
     cacheBust: true,
     backgroundColor,
     width: SHARE_EXPORT_WIDTH,
-    height: SHARE_EXPORT_HEIGHT,
+    height: exportHeight,
     canvasWidth: SHARE_EXPORT_WIDTH,
-    canvasHeight: SHARE_EXPORT_HEIGHT,
+    canvasHeight: exportHeight,
     style: {
-      // Keep the preview layout box; scale it up into the 1080×1600 canvas.
+      // Keep the preview layout box; scale it up into the export canvas.
       width: `${layoutWidth}px`,
       height: `${layoutHeight}px`,
       maxWidth: `${layoutWidth}px`,
@@ -310,6 +337,7 @@ async function renderCardBlob(
       minHeight: `${layoutHeight}px`,
       maxHeight: `${layoutHeight}px`,
       margin: "0",
+      overflow: "visible",
       transform: `scale(${scale})`,
       transformOrigin: "top left",
     } as Partial<CSSStyleDeclaration>,
@@ -571,7 +599,7 @@ export default function ResultCard({
 
           <div
             data-card-shell
-            className="relative z-[1] flex w-full flex-col px-5 pb-12 pt-5"
+            className="relative z-[1] flex w-full flex-col px-5 pb-4 pt-5"
           >
             {/* 1. HEADER */}
             <header
@@ -895,11 +923,11 @@ export default function ResultCard({
               ) : null}
             </section>
 
-            {/* 7. FOOTER — normal flow after status (~56px gap), not pinned to canvas bottom */}
+            {/* 7. FOOTER — tighter gap so the QR stays inside the export frame */}
             {isVoid ? (
               <footer
                 data-card-block
-                className="mt-14 flex w-full shrink-0 items-end justify-between gap-3 border-t border-zinc-700/60 pt-2.5"
+                className="mt-8 flex w-full shrink-0 items-end justify-between gap-3 border-t border-zinc-700/60 pt-2.5"
               >
                 <span className="font-mono text-[8px] text-zinc-500">
                   {PUBLIC_HOST}
@@ -909,7 +937,7 @@ export default function ResultCard({
             ) : (
               <footer
                 data-card-block
-                className={`mt-14 flex shrink-0 items-end justify-between gap-3 border-t pt-2.5 ${rule}`}
+                className={`mt-8 flex shrink-0 items-end justify-between gap-3 border-t pt-2.5 ${rule}`}
               >
                 <p
                   data-export-label
