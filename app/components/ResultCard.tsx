@@ -37,6 +37,8 @@ export type ResultCardProps = Pick<
   onSaved?: () => void;
   sessionIdOverride?: string;
   historyPrevious?: HistoryRun | null;
+  /** Fired once when the user starts a result-card download or iOS share. */
+  onCardSave?: (method: "download" | "share") => void;
 };
 
 /** Fixed Save Image / Share canvas — compact content height (~1080×1600). */
@@ -357,17 +359,23 @@ async function renderCardBlob(
   return blob;
 }
 
-async function saveExportBlob(blob: Blob, filename: string) {
+async function saveExportBlob(
+  blob: Blob,
+  filename: string,
+  onStart?: (method: "download" | "share") => void,
+) {
   const file = new File([blob], filename, { type: "image/png" });
 
   if (isIos()) {
     if (typeof navigator.share === "function" && navigator.canShare?.({ files: [file] })) {
+      onStart?.("share");
       await navigator.share({
         files: [file],
         title: "Mind OS Neural Benchmark",
       });
       return;
     }
+    onStart?.("download");
     const url = URL.createObjectURL(blob);
     const opened = window.open(url, "_blank");
     if (!opened) {
@@ -381,6 +389,7 @@ async function saveExportBlob(blob: Blob, filename: string) {
     return;
   }
 
+  onStart?.("download");
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.download = filename;
@@ -395,9 +404,10 @@ async function exportCardImage(
   source: HTMLElement,
   filename: string,
   backgroundColor: string,
+  onStart?: (method: "download" | "share") => void,
 ) {
   const blob = await renderCardBlob(source, backgroundColor);
-  await saveExportBlob(blob, filename);
+  await saveExportBlob(blob, filename, onStart);
 }
 
 export default function ResultCard({
@@ -411,11 +421,13 @@ export default function ResultCard({
   onSaved,
   sessionIdOverride,
   historyPrevious = null,
+  onCardSave,
 }: ResultCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [qrReady, setQrReady] = useState(false);
+  const saveLockRef = useRef(false);
   const [showWallpaperModal, setShowWallpaperModal] = useState(false);
   const [metricsOpen, setMetricsOpen] = useState(false);
 
@@ -495,23 +507,25 @@ export default function ResultCard({
   }, [shareUrl, isDarkCard]);
 
   const handleSave = useCallback(async () => {
-    if (!cardRef.current || isExporting || !qrReady) return;
+    if (!cardRef.current || saveLockRef.current || isExporting || !qrReady) return;
+    saveLockRef.current = true;
     setIsExporting(true);
     setToast(null);
     try {
       await new Promise<void>((resolve) => window.setTimeout(resolve, 50));
       if (!cardRef.current) return;
       const filename = `mind-os-${sessionId.toLowerCase()}.png`;
-      await exportCardImage(cardRef.current, filename, tier.cardBackground);
+      await exportCardImage(cardRef.current, filename, tier.cardBackground, onCardSave);
       setToast(t.saved);
       onSaved?.();
     } catch {
       setToast(lang === "zh" ? "匯出失敗，請再試一次" : "Export failed. Try again.");
     } finally {
+      saveLockRef.current = false;
       setIsExporting(false);
       window.setTimeout(() => setToast(null), 2600);
     }
-  }, [isExporting, lang, onSaved, qrReady, sessionId, t.saved, tier.cardBackground]);
+  }, [isExporting, lang, onCardSave, onSaved, qrReady, sessionId, t.saved, tier.cardBackground]);
 
   const cmpTone = isVoid
     ? "text-zinc-500"

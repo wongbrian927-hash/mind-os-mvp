@@ -32,6 +32,14 @@ import {
   parseDevTier,
   type DevTierOverride,
 } from "@/lib/devTierOverride";
+import {
+  captureBreathingComplete,
+  captureBreathingStart,
+  captureCardSaved,
+  captureLandingView,
+  captureTestComplete,
+  captureTestStart,
+} from "@/lib/analytics";
 
 const IS_DEV = process.env.NODE_ENV === "development";
 
@@ -137,7 +145,7 @@ const COPY = {
     tier00BreathHint:
       "你嘅反應時間已達 TIER 00 水準，但 TIER 00 需要先完成 5-5 呼吸校準才作評定。\n下次先完成呼吸，再做測試。",
     disclaimer:
-      "MIND OS 結果僅反映今次作答表現，供個人參考，不構成任何醫療或臨床診斷。",
+      "MIND OS 結果僅反映今次作答表現，供個人參考，不構成任何醫療或臨床診斷。Mind OS 會用 PostHog 及隨機匿名識別碼記錄測試開始、完成、Tier、反應時間、干擾與準確率的整數總結、是否完成呼吸練習，以及結果卡下載等使用事件，用途是了解功能使用情況及改善產品；不會記錄姓名、電郵或逐題答案。",
   },
   en: {
     subtitle: "Breathe · Focus · React",
@@ -187,7 +195,7 @@ const COPY = {
     tier00BreathHint:
       "Your reaction time reached TIER 00 level, but TIER 00 requires completing 5-5 calibration first.\nRun the breathing calibration before your next test.",
     disclaimer:
-      "MIND OS results reflect this run only for personal reference, and do not constitute medical or clinical diagnosis.",
+      "MIND OS results reflect this run only for personal reference, and do not constitute medical or clinical diagnosis. Mind OS uses PostHog and a random anonymous identifier to record usage events: test start, test completion, tier, integer summaries of reaction time, interference, and accuracy, whether the breathing exercise was completed, and result-card downloads. This is used to understand how features are used and to improve the product. Names, email addresses, and individual trial answers are not recorded.",
   },
 } as const;
 
@@ -344,6 +352,12 @@ function Home() {
 
   const completedBreathingBeforeTestRef = useRef(false);
   completedBreathingBeforeTestRef.current = completedBreathingBeforeTest;
+  const attemptIdRef = useRef<string | null>(null);
+  const isRetestRef = useRef(false);
+  const attemptNumberRef = useRef(0);
+  const attemptTierIdRef = useRef<string | null>(null);
+  const testCompleteSentRef = useRef<string | null>(null);
+  const breathingStartSentRef = useRef(false);
 
   const clearTimer = (ref: { current: number | null }) => {
     if (ref.current !== null) {
@@ -411,6 +425,7 @@ function Home() {
         runningRef.current = false;
         setIsRunning(false);
         setCompletedBreathingBeforeTest(true);
+        captureBreathingComplete();
         phaseRef.current = "inhale";
         remainingRef.current = PHASE_MS.inhale;
         setPhase("inhale");
@@ -441,11 +456,17 @@ function Home() {
       setScale(MIN_SCALE);
       setTransitionMs(0);
       setCompletedBreathingBeforeTest(false);
+      breathingStartSentRef.current = false;
     }
+    const startingFresh = cyclesRef.current === 0 && !breathingStartSentRef.current;
     runningRef.current = true;
     setIsRunning(true);
     setBreathStarted(true);
     setBreathPanelOpen(true);
+    if (startingFresh) {
+      breathingStartSentRef.current = true;
+      captureBreathingStart();
+    }
     window.setTimeout(() => {
       startBreathPhase(phaseRef.current, remainingRef.current);
     }, 30);
@@ -567,6 +588,21 @@ function Home() {
     setHistoryNotice("none");
     reactionPhaseRef.current = "instruction";
     setReactionPhase("instruction");
+    const attemptId =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `attempt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    attemptNumberRef.current += 1;
+    attemptIdRef.current = attemptId;
+    isRetestRef.current = getLastValidRun() !== null;
+    attemptTierIdRef.current = null;
+    testCompleteSentRef.current = null;
+    captureTestStart({
+      attempt_id: attemptId,
+      is_retest: isRetestRef.current,
+      did_complete_breathing: completedBreathingBeforeTestRef.current,
+      attempt_number: attemptNumberRef.current,
+    });
   }, []);
 
   startReactionTestRef.current = startReactionTest;
@@ -697,26 +733,41 @@ function Home() {
           stroopLatencies: nextResults.map((item) => item.latencyMs),
           interrupted: sessionInterruptedRef.current,
         });
+        const tierId = buildHistoryTierLabel({
+          latency: avgLatency,
+          interference: interferenceMs,
+          accuracy: accuracyPct,
+          completedBreathingBeforeTest: completedBreathingBeforeTestRef.current,
+          apexVariant: lockedVariant,
+        });
+        const attemptId = attemptIdRef.current;
+        if (attemptId && testCompleteSentRef.current !== attemptId) {
+          testCompleteSentRef.current = attemptId;
+          attemptTierIdRef.current = tierId;
+          captureTestComplete({
+            attempt_id: attemptId,
+            tier_id: tierId,
+            is_retest: isRetestRef.current,
+            did_complete_breathing: completedBreathingBeforeTestRef.current,
+            attempt_number: attemptNumberRef.current,
+            latency_ms: avgLatency,
+            interference_ms: interferenceMs,
+            accuracy: accuracyPct,
+          });
+        }
 
         if (suspect) {
           setHistoryPrevious(null);
           setHistoryNotice("invalid");
         } else {
           const previous = getLastValidRun();
-          const tierLabel = buildHistoryTierLabel({
-            latency: avgLatency,
-            interference: interferenceMs,
-            accuracy: accuracyPct,
-            completedBreathingBeforeTest: completedBreathingBeforeTestRef.current,
-            apexVariant: lockedVariant,
-          });
           appendValidRun({
             id: createHistoryId(),
             timestamp: new Date().toISOString(),
             reactionMs: avgLatency,
             stroopAccuracy: accuracyPct,
             interferenceMs: Math.max(0, interferenceMs),
-            tier: tierLabel,
+            tier: tierId,
             valid: true,
           });
           setHistoryPrevious(previous);
@@ -854,6 +905,16 @@ function Home() {
     setIsRunning(false);
     setBreathStarted(false);
     setBreathPanelOpen(false);
+    cyclesRef.current = 0;
+    phaseRef.current = "inhale";
+    remainingRef.current = PHASE_MS.inhale;
+    breathingStartSentRef.current = false;
+    setCycles(0);
+    setPhase("inhale");
+    setSecondsLeft(5);
+    setScale(MIN_SCALE);
+    setTransitionMs(300);
+    setCompletedBreathingBeforeTest(false);
   };
 
   const goHome = () => {
@@ -957,6 +1018,10 @@ function Home() {
     if (!key) return;
     injectMockTier(key);
   }, [injectDevTier, injectMockTier, searchParams]);
+
+  useEffect(() => {
+    captureLandingView();
+  }, []);
 
   useEffect(() => {
     if (latencies.length !== REACTION_TRIALS) return;
@@ -1383,6 +1448,17 @@ function Home() {
               completedBreathingBeforeTest={completedBreathingBeforeTest}
               apexVariant={apexVariant}
               sessionIdOverride={mockSessionId ?? undefined}
+              onCardSave={(method) => {
+                const attemptId = attemptIdRef.current;
+                const tierId = attemptTierIdRef.current;
+                if (!attemptId || !tierId || testCompleteSentRef.current !== attemptId) return;
+                captureCardSaved({
+                  attempt_id: attemptId,
+                  tier_id: tierId,
+                  did_complete_breathing: completedBreathingBeforeTestRef.current,
+                  method,
+                });
+              }}
               historyPrevious={
                 historyNotice === "compare" ? historyPrevious : null
               }
