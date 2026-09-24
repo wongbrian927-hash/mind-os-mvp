@@ -40,9 +40,12 @@ const privacyOptions = {
   capture_pageview: false,
   capture_pageleave: false,
   disable_session_recording: true,
+  capture_dead_clicks: false,
+  capture_performance: false,
+  enable_heatmaps: false,
+  capture_exceptions: false,
   disable_surveys: true,
   rageclick: false,
-  capture_exceptions: false,
   advanced_disable_feature_flags: true,
   person_profiles: "identified_only",
 } as const;
