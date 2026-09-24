@@ -35,6 +35,8 @@ export type TierConfig = {
   diagnosis: string;
   /** Optional supporting line under diagnosis (retest hint, etc.). */
   diagnosisSupport: string | null;
+  /** Optional practice invite under the run summary. Tier 03–04 only. */
+  practiceNote: string | null;
   /** Soft footer note: single-run framing. */
   sessionNote: string | null;
   interferenceLabel: string;
@@ -213,6 +215,11 @@ const RETEST_SUPPORT = {
   en: "Distracted or laggy? Try again.",
 } as const;
 
+const PRACTICE_NOTE = {
+  zh: "想轉換一下節奏？可以試試 30 秒呼吸。",
+  en: "Want a change of pace? Try the 30-second breath.",
+} as const;
+
 /** Map Latency + Interference + Accuracy (+ breath calibration) → linked visual / system state. */
 export function getTierConfig(data: TierInput): TierConfig {
   const { interference, lang, completedBreathingBeforeTest, apexVariant } = data;
@@ -243,6 +250,7 @@ export function getTierConfig(data: TierInput): TierConfig {
         ? "今次訊號極乾淨，干擾趨近於零。"
         : "Signal is clean — interference near zero.",
       diagnosisSupport: null,
+      practiceNote: null,
       sessionNote,
       interferenceLabel: "Zero Interference",
       breathLabel: "VOID LOCK",
@@ -279,6 +287,7 @@ export function getTierConfig(data: TierInput): TierConfig {
         ? "今次反應引擎完全對齊，干擾趨近於零。"
         : "Reaction engine locked in sync. Interference near zero.",
       diagnosisSupport: null,
+      practiceNote: null,
       sessionNote,
       interferenceLabel: "Zero Interference",
       breathLabel: preset.breathLabel,
@@ -312,6 +321,7 @@ export function getTierConfig(data: TierInput): TierConfig {
         ? "今次反應很快，干擾維持在低水平。"
         : "Fast reaction this run. Interference stayed low.",
       diagnosisSupport: null,
+      practiceNote: null,
       sessionNote,
       interferenceLabel: isZh ? "極低干擾" : "High Resilience",
       breathLabel: completedBreathingBeforeTest ? "ALIGNED" : "STABLE",
@@ -341,6 +351,7 @@ export function getTierConfig(data: TierInput): TierConfig {
         ? "今次表現穩陣，屬正常區間。"
         : "Solid run — within a normal range.",
       diagnosisSupport: null,
+      practiceNote: null,
       sessionNote,
       interferenceLabel: isZh ? "平衡抑制" : "Balanced Control",
       breathLabel: completedBreathingBeforeTest ? "ALIGNED" : "STABLE",
@@ -370,6 +381,7 @@ export function getTierConfig(data: TierInput): TierConfig {
         ? "今次有啲慢熱，但唔代表系統壞咗。"
         : "A bit slow to warm up — not a broken system.",
       diagnosisSupport: retestSupport,
+      practiceNote: isZh ? PRACTICE_NOTE.zh : PRACTICE_NOTE.en,
       sessionNote,
       interferenceLabel: isZh ? "中度干擾" : "Moderate Load",
       breathLabel: "DRIFT",
@@ -398,6 +410,7 @@ export function getTierConfig(data: TierInput): TierConfig {
       ? "今次反應偏慢，建議再測一次。"
       : "Slower reaction this run. Worth another pass.",
     diagnosisSupport: retestSupport,
+    practiceNote: isZh ? PRACTICE_NOTE.zh : PRACTICE_NOTE.en,
     sessionNote,
     interferenceLabel:
       interference > 220

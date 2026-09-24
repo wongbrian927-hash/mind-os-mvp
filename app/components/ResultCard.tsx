@@ -717,25 +717,27 @@ export default function ResultCard({
               >
                 {t.tier}
               </p>
-              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
-                <span
-                  className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
-                  style={{
-                    background: isVoid
-                      ? "#fff"
-                      : (tier.spectrumGradient ?? tier.accent),
-                    backgroundColor: isVoid ? "#fff" : tier.accent,
-                    boxShadow: isVoid
-                      ? "0 0 8px rgba(255,255,255,0.7)"
-                      : tier.glow,
-                  }}
-                />
-                <span
-                  data-export-title
-                  className={`min-w-0 truncate text-[13px] font-medium tracking-wide ${titleTone}`}
-                >
-                  {isVoid ? "MONOCHROME VOID" : tier.title}
-                </span>
+              <div className="mt-1 flex min-w-0 items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span
+                    className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+                    style={{
+                      background: isVoid
+                        ? "#fff"
+                        : (tier.spectrumGradient ?? tier.accent),
+                      backgroundColor: isVoid ? "#fff" : tier.accent,
+                      boxShadow: isVoid
+                        ? "0 0 8px rgba(255,255,255,0.7)"
+                        : tier.glow,
+                    }}
+                  />
+                  <span
+                    data-export-title
+                    className={`min-w-0 truncate text-[13px] font-medium tracking-wide ${titleTone}`}
+                  >
+                    {isVoid ? "MONOCHROME VOID" : tier.title}
+                  </span>
+                </div>
                 <span
                   data-export-pill
                   className={`shrink-0 px-1.5 py-0.5 font-mono text-[7px] tracking-[0.08em] ${
@@ -913,6 +915,15 @@ export default function ResultCard({
               >
                 {shareSummary}
               </p>
+              {tier.practiceNote ? (
+                <p
+                  data-export-body
+                  data-practice-note
+                  className={`mt-0.5 text-[10px] leading-snug ${diagnosisTone}`}
+                >
+                  {tier.practiceNote}
+                </p>
+              ) : null}
               {tier.sessionNote ? (
                 <p
                   data-export-body
