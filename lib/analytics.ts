@@ -129,6 +129,7 @@ export function captureTestComplete(properties: {
   latency_ms: number;
   interference_ms: number;
   accuracy: number;
+  is_interrupted: boolean;
 }) {
   capture("test_complete", properties);
 }
@@ -138,6 +139,7 @@ export function captureCardSaved(properties: {
   tier_id: string;
   did_complete_breathing: boolean;
   method: "download" | "share";
+  is_interrupted: boolean;
 }) {
   capture("card_saved", properties);
 }

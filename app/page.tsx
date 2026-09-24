@@ -356,6 +356,7 @@ function Home() {
   const isRetestRef = useRef(false);
   const attemptNumberRef = useRef(0);
   const attemptTierIdRef = useRef<string | null>(null);
+  const attemptInterruptedRef = useRef(false);
   const testCompleteSentRef = useRef<string | null>(null);
   const breathingStartSentRef = useRef(false);
 
@@ -744,6 +745,7 @@ function Home() {
         if (attemptId && testCompleteSentRef.current !== attemptId) {
           testCompleteSentRef.current = attemptId;
           attemptTierIdRef.current = tierId;
+          attemptInterruptedRef.current = suspect;
           captureTestComplete({
             attempt_id: attemptId,
             tier_id: tierId,
@@ -753,6 +755,7 @@ function Home() {
             latency_ms: avgLatency,
             interference_ms: interferenceMs,
             accuracy: accuracyPct,
+            is_interrupted: suspect,
           });
         }
 
@@ -1457,6 +1460,7 @@ function Home() {
                   tier_id: tierId,
                   did_complete_breathing: completedBreathingBeforeTestRef.current,
                   method,
+                  is_interrupted: attemptInterruptedRef.current,
                 });
               }}
               historyPrevious={
