@@ -104,7 +104,7 @@ export function getDevTierFixture(key: DevTierOverride): DevTierFixture {
       return {
         latency: 310,
         interference: TIER_BASELINE_LOSS[3],
-        accuracy: 75,
+        accuracy: 83,
         completedBreathingBeforeTest: false,
         apexVariant: null,
         sessionId: "MOS-DEV-T003",

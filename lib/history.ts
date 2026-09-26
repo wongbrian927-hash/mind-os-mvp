@@ -5,6 +5,8 @@ import {
 } from "@/lib/calculateTier";
 
 export const HISTORY_STORAGE_KEY = "mind_os_history_v1";
+/** Color trials that show two choices, with the word color as the incongruent distractor. */
+export const COLOR_TASK_TWO_CHOICE = "two-choice";
 const MAX_VALID_RUNS = 30;
 
 export type HistoryRun = {
@@ -15,6 +17,8 @@ export type HistoryRun = {
   interferenceMs: number | null;
   tier: string;
   valid: boolean;
+  /** Absent on runs taken before the two-choice color task. */
+  colorTask?: string;
 };
 
 export type MetricCmp = {
@@ -32,7 +36,8 @@ function isHistoryRun(value: unknown): value is HistoryRun {
     typeof row.stroopAccuracy === "number" &&
     (row.interferenceMs === null || typeof row.interferenceMs === "number") &&
     typeof row.tier === "string" &&
-    typeof row.valid === "boolean"
+    typeof row.valid === "boolean" &&
+    (row.colorTask === undefined || typeof row.colorTask === "string")
   );
 }
 

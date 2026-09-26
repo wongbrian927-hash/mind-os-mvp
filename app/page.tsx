@@ -22,6 +22,7 @@ import {
 } from "@/lib/calculateTier";
 import {
   appendValidRun,
+  COLOR_TASK_TWO_CHOICE,
   buildHistoryTierLabel,
   createHistoryId,
   getLastValidRun,
@@ -40,6 +41,15 @@ import {
   captureTestComplete,
   captureTestStart,
 } from "@/lib/analytics";
+import {
+  STROOP_COUNT,
+  buildStroopTrials,
+  randomForeperiodMs,
+  reactionLatencyMs,
+  scoreStroop,
+  type InkColor,
+  type StroopTrial,
+} from "@/lib/focusSession";
 
 const IS_DEV = process.env.NODE_ENV === "development";
 
@@ -55,14 +65,7 @@ type ReactionPhase =
   | "too_soon";
 type SessionStage = "srt" | "stroop" | "summary";
 type StroopPhase = "instruction" | "countdown" | "stimulus" | "gap";
-type InkColor = "red" | "blue";
 type CountdownStep = "3" | "2" | "1" | "START";
-
-type StroopTrial = {
-  wordColor: InkColor;
-  ink: InkColor;
-  congruent: boolean;
-};
 
 type StroopResult = {
   congruent: boolean;
@@ -72,10 +75,7 @@ type StroopResult = {
 
 const TARGET_CYCLES = 3;
 const REACTION_TRIALS = 5;
-const FOREPERIOD_MIN_MS = 1500;
-const FOREPERIOD_MAX_MS = 6000;
 const FALSE_START_MS = 50;
-const STROOP_COUNT = 4;
 const COUNTDOWN_DIGIT_MS = 800;
 const COUNTDOWN_START_MS = 500;
 const COUNTDOWN_STEPS: CountdownStep[] = ["3", "2", "1", "START"];
@@ -92,13 +92,42 @@ const BREATH_OPTIONAL_SECONDS =
 const INK_HEX: Record<InkColor, string> = {
   red: "#f43f5e",
   blue: "#3b82f6",
+  green: "#22c55e",
 };
+
+const STROOP_BUTTONS: {
+  color: InkColor;
+  liveClass: string;
+  previewClass: string;
+}[] = [
+  {
+    color: "red",
+    liveClass: "bg-rose-500 shadow-[0_0_24px_rgba(244,63,94,0.35)]",
+    previewClass: "bg-rose-500/90",
+  },
+  {
+    color: "blue",
+    liveClass: "bg-blue-500 shadow-[0_0_24px_rgba(59,130,246,0.35)]",
+    previewClass: "bg-blue-500/90",
+  },
+  {
+    color: "green",
+    liveClass: "bg-green-500 shadow-[0_0_24px_rgba(34,197,94,0.35)]",
+    previewClass: "bg-green-500/90",
+  },
+];
+
+function cancelFrame(ref: { current: number | null }) {
+  if (ref.current === null || typeof window === "undefined") return;
+  window.cancelAnimationFrame(ref.current);
+  ref.current = null;
+}
 
 const COPY = {
   zh: {
     subtitle: "呼吸 · 專注 · 反應",
     heroTitle: "測試你此刻的反應與專注",
-    heroSubtitle: "約 1 分鐘完成，取得個人數據與專屬 Tier。",
+    heroSubtitle: "約 1 至 2 分鐘完成，取得個人數據與專屬 Tier。",
     rewardTeaser: "完成後解鎖你的 Tier 與專屬視覺",
     startTest: "開始測試",
     startBreath: "先做 30 秒呼吸",
@@ -124,15 +153,15 @@ const COPY = {
     stroopTitle: "色彩干擾測試",
     stroopInstructionTitle: "看到顏色後，選擇文字的顏色",
     stroopInstructionBody: "請忽略文字本身的意思，只判斷它顯示的顏色。",
-    stroopExampleRed:
-      "如果「藍色」兩個字以紅色顯示 → 選「紅」",
-    stroopExampleBlue:
-      "如果「紅色」兩個字以藍色顯示 → 選「藍」",
-    stroopMobileHint: "畫面下方會顯示",
-    stroopDesktopKeys: "電腦亦可使用鍵盤：紅 [R]　藍 [B]",
-    btnRed: "紅",
-    btnBlue: "藍",
-    word: { red: "紅", blue: "藍" } as Record<InkColor, string>,
+    stroopExampleRed: "如果「藍色」兩個字以紅色顯示 → 選「紅」",
+    stroopExampleBlue: "如果「紅色」兩個字以藍色顯示 → 選「藍」",
+    stroopExampleGreen: "如果「紅色」兩個字以綠色顯示 → 選「綠」",
+    stroopMobileHint: "三種顏色示範",
+    stroopTwoChoice:
+      "正式測試每題只會出現兩個選項，請選字體的顏色，不要選字的意思。",
+    stroopDesktopKeys: "電腦鍵與畫面上的選項相同：紅 [R]　藍 [B]　綠 [G]",
+    choice: { red: "紅", blue: "藍", green: "綠" } as Record<InkColor, string>,
+    word: { red: "紅", blue: "藍", green: "綠" } as Record<InkColor, string>,
     again: "再測一次",
     abnormalTitle: "這次測試可能受到中斷或延遲影響。",
     abnormalRetry: "重新測試",
@@ -150,7 +179,7 @@ const COPY = {
   en: {
     subtitle: "Breathe · Focus · React",
     heroTitle: "Test your reaction and focus",
-    heroSubtitle: "About 1 minute. Get your personal data and exclusive Tier.",
+    heroSubtitle: "About 1–2 minutes. Get your personal data and exclusive Tier.",
     rewardTeaser: "Finish to unlock your Tier and exclusive visuals",
     startTest: "Start test",
     startBreath: "Breathe for 30 seconds",
@@ -178,11 +207,13 @@ const COPY = {
     stroopInstructionBody: "Ignore the word meaning. Respond only to the display color.",
     stroopExampleRed: 'If “BLUE” appears in red → choose Red',
     stroopExampleBlue: 'If “RED” appears in blue → choose Blue',
-    stroopMobileHint: "Buttons appear below:",
-    stroopDesktopKeys: "Desktop keys: Red [R] · Blue [B]",
-    btnRed: "Red",
-    btnBlue: "Blue",
-    word: { red: "RED", blue: "BLUE" } as Record<InkColor, string>,
+    stroopExampleGreen: 'If “RED” appears in green → choose Green',
+    stroopMobileHint: "Color samples",
+    stroopTwoChoice:
+      "Each question in the test shows only two choices. Choose the color of the letters, not the meaning of the word.",
+    stroopDesktopKeys: "Desktop keys match the choices on screen: Red [R] · Blue [B] · Green [G]",
+    choice: { red: "Red", blue: "Blue", green: "Green" } as Record<InkColor, string>,
+    word: { red: "RED", blue: "BLUE", green: "GREEN" } as Record<InkColor, string>,
     again: "Retry",
     abnormalTitle: "This run may have been interrupted or delayed.",
     abnormalRetry: "Retake test",
@@ -199,30 +230,8 @@ const COPY = {
   },
 } as const;
 
-function randomWait() {
-  return FOREPERIOD_MIN_MS + Math.random() * (FOREPERIOD_MAX_MS - FOREPERIOD_MIN_MS);
-}
-
 function isSpaceKey(event: KeyboardEvent) {
   return !event.repeat && (event.code === "Space" || event.key === " ");
-}
-
-function shuffle<T>(items: T[]) {
-  const next = [...items];
-  for (let i = next.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [next[i], next[j]] = [next[j], next[i]];
-  }
-  return next;
-}
-
-function buildStroopTrials(): StroopTrial[] {
-  return shuffle([
-    { wordColor: "red", ink: "red", congruent: true },
-    { wordColor: "blue", ink: "blue", congruent: true },
-    { wordColor: "red", ink: "blue", congruent: false },
-    { wordColor: "blue", ink: "red", congruent: false },
-  ]);
 }
 
 function mean(values: number[]) {
@@ -333,6 +342,7 @@ function Home() {
   const waitTimerRef = useRef<number | null>(null);
   const countdownTimerRef = useRef<number | null>(null);
   const goAtRef = useRef<number | null>(null);
+  const goFrameRef = useRef<number | null>(null);
 
   const sessionStageRef = useRef<SessionStage>("srt");
   const reactionPhaseRef = useRef<ReactionPhase>("ready");
@@ -500,14 +510,21 @@ function Home() {
 
   const armTrial = useCallback(() => {
     clearTimer(waitTimerRef);
+    cancelFrame(goFrameRef);
     goAtRef.current = null;
     reactionPhaseRef.current = "waiting";
     setReactionPhase("waiting");
+    const waitMs = randomForeperiodMs();
     waitTimerRef.current = window.setTimeout(() => {
-      goAtRef.current = performance.now();
+      if (reactionPhaseRef.current !== "waiting") return;
       reactionPhaseRef.current = "go";
       setReactionPhase("go");
-    }, randomWait());
+      goFrameRef.current = window.requestAnimationFrame(() => {
+        goFrameRef.current = null;
+        if (reactionPhaseRef.current !== "go") return;
+        goAtRef.current = performance.now();
+      });
+    }, waitMs);
   }, []);
 
   const beginStroopStimulus = useCallback((index: number) => {
@@ -644,6 +661,8 @@ function Home() {
     const markFalseStart = () => {
       reactionPhaseRef.current = "too_soon";
       clearTimer(waitTimerRef);
+      cancelFrame(goFrameRef);
+      goAtRef.current = null;
       setReactionPhase("too_soon");
       waitTimerRef.current = window.setTimeout(() => {
         armTrial();
@@ -655,11 +674,11 @@ function Home() {
       return;
     }
 
-    if (current !== "go" || goAtRef.current === null) return;
+    if (current !== "go") return;
 
-    const ms = Math.round(performance.now() - goAtRef.current);
+    const ms = reactionLatencyMs(goAtRef.current, performance.now());
+    if (ms === null) return;
     if (ms < FALSE_START_MS) {
-      goAtRef.current = null;
       markFalseStart();
       return;
     }
@@ -691,9 +710,10 @@ function Home() {
       if (stroopPhaseRef.current !== "stimulus" || stroopLockedRef.current) return;
       if (stroopShownAtRef.current === null) return;
 
-      stroopLockedRef.current = true;
       const trial = stroopTrialsRef.current[stroopIndexRef.current];
-      if (!trial) return;
+      if (!trial || !trial.options.includes(color)) return;
+
+      stroopLockedRef.current = true;
 
       const nextResults = [
         ...stroopResultsRef.current,
@@ -708,15 +728,11 @@ function Home() {
 
       const nextIndex = stroopIndexRef.current + 1;
       if (nextIndex >= STROOP_COUNT) {
+        const scored = scoreStroop(nextResults);
+        if (!scored) return;
         const avgLatency = Math.round(median(latenciesRef.current));
-        const congruent = nextResults.filter((item) => item.congruent).map((item) => item.latencyMs);
-        const incongruent = nextResults
-          .filter((item) => !item.congruent)
-          .map((item) => item.latencyMs);
-        const interferenceMs = Math.round(mean(incongruent) - mean(congruent));
-        const accuracyPct = Math.round(
-          (nextResults.filter((item) => item.correct).length / STROOP_COUNT) * 100,
-        );
+        const interferenceMs = scored.interferenceMs;
+        const accuracyPct = scored.accuracyPct;
         const gate = {
           latency: avgLatency,
           interference: interferenceMs,
@@ -772,6 +788,7 @@ function Home() {
             interferenceMs: Math.max(0, interferenceMs),
             tier: tierId,
             valid: true,
+            colorTask: COLOR_TASK_TWO_CHOICE,
           });
           setHistoryPrevious(previous);
           setHistoryNotice(previous ? "compare" : "baseline");
@@ -826,9 +843,11 @@ function Home() {
       }
       if (event.repeat) return;
       const key = event.key.toLowerCase();
-      if (key !== "r" && key !== "b") return;
+      const ink =
+        key === "r" ? "red" : key === "b" ? "blue" : key === "g" ? "green" : null;
+      if (!ink) return;
       event.preventDefault();
-      handleStroopKeyRef.current(key === "r" ? "red" : "blue");
+      handleStroopKeyRef.current(ink);
     };
 
     window.addEventListener("keydown", onKeyDown);
@@ -869,12 +888,15 @@ function Home() {
       clearTimer(breathTimerRef);
       clearTimer(tickTimerRef);
       clearTimer(waitTimerRef);
+      cancelFrame(goFrameRef);
       clearTimer(countdownTimerRef);
     };
   }, []);
 
   const retrySession = () => {
     clearTimer(waitTimerRef);
+    cancelFrame(goFrameRef);
+    goAtRef.current = null;
     clearTimer(breathTimerRef);
     clearTimer(tickTimerRef);
     clearTimer(countdownTimerRef);
@@ -943,6 +965,8 @@ function Home() {
       clearTimer(breathTimerRef);
       clearTimer(tickTimerRef);
       clearTimer(waitTimerRef);
+      cancelFrame(goFrameRef);
+      goAtRef.current = null;
       runningRef.current = false;
       setIsRunning(false);
       setBreathStarted(false);
@@ -984,6 +1008,8 @@ function Home() {
     clearTimer(breathTimerRef);
     clearTimer(tickTimerRef);
     clearTimer(waitTimerRef);
+    cancelFrame(goFrameRef);
+    goAtRef.current = null;
     runningRef.current = false;
     setIsRunning(false);
     setBreathStarted(false);
@@ -1038,19 +1064,10 @@ function Home() {
 
   const avgSrt =
     latencies.length === REACTION_TRIALS ? Math.round(median(latencies)) : null;
-  const rawInterference =
-    stroopResults.length === STROOP_COUNT
-      ? Math.round(
-          mean(stroopResults.filter((item) => !item.congruent).map((item) => item.latencyMs)) -
-            mean(stroopResults.filter((item) => item.congruent).map((item) => item.latencyMs)),
-        )
-      : null;
-  const acc =
-    stroopResults.length === STROOP_COUNT
-      ? Math.round(
-          (stroopResults.filter((item) => item.correct).length / STROOP_COUNT) * 100,
-        )
-      : null;
+  const stroopScore =
+    stroopResults.length === STROOP_COUNT ? scoreStroop(stroopResults) : null;
+  const rawInterference = stroopScore?.interferenceMs ?? null;
+  const acc = stroopScore?.accuracyPct ?? null;
   const currentStroop = stroopTrials[stroopIndex];
   const isReadyHome = sessionStage === "srt" && reactionPhase === "ready";
   const showBreathPanel = isReadyHome && breathPanelOpen;
@@ -1087,7 +1104,7 @@ function Home() {
 
       <main
         className={`relative z-10 mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-4 px-4 pt-16 sm:gap-6 sm:px-10 sm:pt-10 ${
-          sessionStage === "summary" || isReadyHome
+          sessionStage === "summary" || sessionStage === "stroop" || isReadyHome
             ? "overflow-y-auto pb-10 sm:pb-12"
             : "overflow-hidden pb-6 sm:pb-10"
         }`}
@@ -1325,16 +1342,20 @@ function Home() {
               <div className="mt-6 w-full space-y-3 text-left text-sm leading-7 text-slate-400">
                 <p>{t.stroopExampleRed}</p>
                 <p>{t.stroopExampleBlue}</p>
+                <p>{t.stroopExampleGreen}</p>
               </div>
               <p className="mt-7 text-xs tracking-[0.2em] text-slate-500">{t.stroopMobileHint}</p>
-              <div className="mt-3 grid w-full grid-cols-2 gap-3">
-                <div className="rounded-xl bg-rose-500/90 py-4 text-center text-lg font-bold text-white">
-                  {t.btnRed}
-                </div>
-                <div className="rounded-xl bg-blue-500/90 py-4 text-center text-lg font-bold text-white">
-                  {t.btnBlue}
-                </div>
+              <div className="mt-3 flex w-full flex-col gap-3 sm:grid sm:grid-cols-3">
+                {STROOP_BUTTONS.map((button) => (
+                  <div
+                    key={button.color}
+                    className={`min-h-16 rounded-xl py-4 text-center text-lg font-bold text-white ${button.previewClass}`}
+                  >
+                    {t.choice[button.color]}
+                  </div>
+                ))}
               </div>
+              <p className="mt-5 text-sm leading-7 text-slate-300">{t.stroopTwoChoice}</p>
               <p className="mt-4 hidden text-xs leading-5 tracking-wide text-slate-500 sm:block">
                 {t.stroopDesktopKeys}
               </p>
@@ -1360,10 +1381,14 @@ function Home() {
           ) : sessionStage === "stroop" ? (
             <div className="flex w-full max-w-md flex-col items-center justify-center">
               <p className="text-[11px] tracking-[0.35em] text-slate-400">{t.stroopTitle}</p>
-              <div className="mt-10 flex min-h-28 items-center justify-center sm:mt-12 sm:min-h-32">
+              <div className="mt-10 flex min-h-28 w-full items-center justify-center px-2 sm:mt-12 sm:min-h-32">
                 {stroopPhase === "stimulus" && currentStroop ? (
                   <p
-                    className="text-7xl font-medium tracking-[0.28em]"
+                    className={
+                      t.word[currentStroop.wordColor].length > 4
+                        ? "text-5xl font-medium tracking-[0.08em] sm:text-6xl sm:tracking-[0.12em]"
+                        : "text-7xl font-medium tracking-[0.28em]"
+                    }
                     style={{ color: INK_HEX[currentStroop.ink] }}
                   >
                     {t.word[currentStroop.wordColor]}
@@ -1376,32 +1401,25 @@ function Home() {
                 {Math.min(stroopIndex + 1, STROOP_COUNT)} / {STROOP_COUNT}
               </p>
               <div className="mt-5 grid w-full grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  disabled={stroopPhase !== "stimulus"}
-                  onClick={() => handleStroopKey("red")}
-                  onTouchStart={(event) => {
-                    if (stroopPhase !== "stimulus") return;
-                    event.preventDefault();
-                    handleStroopKey("red");
-                  }}
-                  className="min-h-16 rounded-xl bg-rose-500 py-5 text-xl font-bold text-white shadow-[0_0_24px_rgba(244,63,94,0.35)] transition active:scale-95 disabled:pointer-events-none disabled:opacity-40"
-                >
-                  {t.btnRed}
-                </button>
-                <button
-                  type="button"
-                  disabled={stroopPhase !== "stimulus"}
-                  onClick={() => handleStroopKey("blue")}
-                  onTouchStart={(event) => {
-                    if (stroopPhase !== "stimulus") return;
-                    event.preventDefault();
-                    handleStroopKey("blue");
-                  }}
-                  className="min-h-16 rounded-xl bg-blue-500 py-5 text-xl font-bold text-white shadow-[0_0_24px_rgba(59,130,246,0.35)] transition active:scale-95 disabled:pointer-events-none disabled:opacity-40"
-                >
-                  {t.btnBlue}
-                </button>
+                {(currentStroop?.options ?? []).map((color) => {
+                  const button = STROOP_BUTTONS.find((item) => item.color === color);
+                  return (
+                    <button
+                      key={color}
+                      type="button"
+                      disabled={stroopPhase !== "stimulus"}
+                      onClick={() => handleStroopKey(color)}
+                      onTouchStart={(event) => {
+                        if (stroopPhase !== "stimulus") return;
+                        event.preventDefault();
+                        handleStroopKey(color);
+                      }}
+                      className={`min-h-16 w-full rounded-xl py-5 text-xl font-bold text-white transition active:scale-95 disabled:pointer-events-none disabled:opacity-40 ${button?.liveClass ?? ""}`}
+                    >
+                      {t.choice[color]}
+                    </button>
+                  );
+                })}
               </div>
               <p className="mt-4 hidden text-xs tracking-wide text-slate-500 sm:block">
                 {t.stroopDesktopKeys}

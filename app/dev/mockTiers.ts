@@ -1,6 +1,7 @@
 /** Dev-only tier preview fixtures. Guard with NODE_ENV === "development". */
 
 import { TIER_BASELINE_LOSS, type ApexVariant } from "@/lib/calculateTier";
+import { STROOP_COUNT } from "@/lib/focusSession";
 
 export type MockTierKey =
   | "tier00"
@@ -95,7 +96,7 @@ export const MOCK_TIERS: Record<MockTierKey, MockTierPayload> = {
     label: "Tier 3 · 認知負載",
     latency: 310,
     interference: TIER_BASELINE_LOSS[3],
-    accuracy: 75,
+    accuracy: 83,
     completedBreathingBeforeTest: false,
     sessionId: "MOS-DEV-T003",
   },
@@ -127,13 +128,20 @@ export function buildMockTrialData(payload: {
 
   const congruentMs = 320;
   const incongruentMs = congruentMs + payload.interference;
-  const correctCount = Math.round((payload.accuracy / 100) * 4);
+  const correctCount = Math.round((payload.accuracy / 100) * STROOP_COUNT);
+  const half = STROOP_COUNT / 2;
 
   const base = [
-    { congruent: true, latencyMs: congruentMs, correct: true },
-    { congruent: true, latencyMs: congruentMs, correct: true },
-    { congruent: false, latencyMs: incongruentMs, correct: true },
-    { congruent: false, latencyMs: incongruentMs, correct: true },
+    ...Array.from({ length: half }, () => ({
+      congruent: true,
+      latencyMs: congruentMs,
+      correct: true,
+    })),
+    ...Array.from({ length: half }, () => ({
+      congruent: false,
+      latencyMs: incongruentMs,
+      correct: true,
+    })),
   ];
 
   const stroopResults = base.map((trial, index) => ({

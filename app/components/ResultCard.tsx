@@ -11,6 +11,7 @@ import {
   type TierLevel,
 } from "@/lib/calculateTier";
 import {
+  COLOR_TASK_TWO_CHOICE,
   compareAccuracy,
   compareInterference,
   compareReaction,
@@ -469,15 +470,15 @@ export default function ResultCard({
   const reactionCmp = historyPrevious
     ? compareReaction(avgSrt, historyPrevious.reactionMs, lang)
     : null;
-  const accuracyCmp = historyPrevious
+  const colorComparable = historyPrevious?.colorTask === COLOR_TASK_TWO_CHOICE;
+  const accuracyCmp = colorComparable
     ? compareAccuracy(acc, historyPrevious.stroopAccuracy, lang)
     : null;
   const interferenceCmp =
-    historyPrevious && historyPrevious.interferenceMs !== null
+    colorComparable && historyPrevious.interferenceMs !== null
       ? compareInterference(interference, historyPrevious.interferenceMs, lang)
       : null;
-  const showTierPath =
-    historyPrevious !== null && historyPrevious.tier !== historyTierLabel;
+  const showTierPath = colorComparable && historyPrevious.tier !== historyTierLabel;
 
   const protocolLabel = completedBreathingBeforeTest
     ? t.protocolCalibrated
@@ -486,7 +487,7 @@ export default function ResultCard({
     lang,
     avgSrt,
     acc,
-    previous: historyPrevious,
+    previous: colorComparable ? historyPrevious : null,
     diagnosis: tier.diagnosis,
   });
 
