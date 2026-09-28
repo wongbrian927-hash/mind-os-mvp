@@ -374,12 +374,12 @@ export function getTierConfig(data: TierInput): TierConfig {
       title: isZh ? "負載偏高" : "Elevated Load",
       titleEn: "TIER 03",
       percentLabel: "TOP 60%",
-      focusPlain: isZh ? "有啲慢熱" : "A bit off",
+      focusPlain: isZh ? "有啲慢喎" : "A little slow this time",
       statusPrimary: "Trapezius: Elevated",
       statusSecondary: "Focus Index: Baseline",
       diagnosis: isZh
-        ? "今次有啲慢熱，但唔代表系統壞咗。"
-        : "A bit slow to warm up — not a broken system.",
+        ? "今次有啲慢喎，但唔代表系統壞咗。"
+        : "Your responses were a little slower this time. This result only reflects this attempt.",
       diagnosisSupport: retestSupport,
       practiceNote: isZh ? PRACTICE_NOTE.zh : PRACTICE_NOTE.en,
       sessionNote,

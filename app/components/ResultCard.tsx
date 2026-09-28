@@ -45,7 +45,6 @@ export type ResultCardProps = Pick<
 /** Fixed Save Image / Share canvas — compact content height (~1080×1600). */
 const SHARE_EXPORT_WIDTH = 1080;
 const SHARE_EXPORT_HEIGHT = 1600;
-const SHARE_ASPECT = `${SHARE_EXPORT_WIDTH} / ${SHARE_EXPORT_HEIGHT}`;
 /** Minimum space below QR / footer bottom edge inside the card. */
 const SHARE_FOOTER_SAFE_PAD = 12;
 
@@ -582,7 +581,7 @@ export default function ResultCard({
   return (
     <div className="mx-auto flex w-full max-w-[380px] flex-col items-center gap-4">
       {/* Fixed 1080×1600 share card — content flow, no footer stretch */}
-      <div className="relative w-full">
+      <div className="relative w-full @container">
         <div
           ref={cardRef}
           data-share-card
@@ -601,7 +600,7 @@ export default function ResultCard({
             boxShadow: isCritical || isVoid ? undefined : tier.cardShadow,
             backgroundColor: isVoid ? undefined : tier.cardBackground,
             opacity: isCritical && isExporting ? 1 : undefined,
-            aspectRatio: SHARE_ASPECT,
+            minHeight: `calc(100cqw * ${SHARE_EXPORT_HEIGHT} / ${SHARE_EXPORT_WIDTH})`,
           }}
         >
           {isApex && !isVoid && tier.radialGlow ? (
@@ -770,7 +769,7 @@ export default function ResultCard({
                   {tier.percentLabel}
                 </span>
               </div>
-              <p className={`mt-0.5 text-[11px] leading-snug ${diagnosisTone}`}>
+              <p className={`mt-0.5 break-words text-[11px] leading-snug ${diagnosisTone}`}>
                 {tier.focusPlain}
               </p>
               {!isVoid ? (
@@ -926,7 +925,7 @@ export default function ResultCard({
               </div>
               <p
                 data-export-body
-                className={`mt-1.5 text-[10px] leading-snug ${diagnosisTone}`}
+                className={`mt-1.5 break-words text-[10px] leading-snug ${diagnosisTone}`}
               >
                 {shareSummary}
               </p>
