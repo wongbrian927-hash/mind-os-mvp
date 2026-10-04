@@ -6,6 +6,7 @@ import {
   FOREPERIOD_MIN_MS,
   STROOP_COUNT,
   buildStroopTrials,
+  colorForChoiceKey,
   isBalancedStroopSet,
   isPredictableCorrectSides,
   isPredictableStroopOrder,
@@ -86,6 +87,31 @@ describe("color focus trials", () => {
       options: [ink as StroopTrial["ink"], "green"],
     }));
     assert.equal(isPredictableStroopOrder(pairs), true);
+  });
+});
+
+describe("choice keys", () => {
+  it("maps 1 and 2 to the buttons currently on the left and right", () => {
+    assert.equal(colorForChoiceKey(["blue", "green"], "1", "Digit1"), "blue");
+    assert.equal(colorForChoiceKey(["blue", "green"], "2", "Digit2"), "green");
+    assert.equal(colorForChoiceKey(["green", "blue"], "1", "Digit1"), "green");
+    assert.equal(colorForChoiceKey(["green", "blue"], "2", "Digit2"), "blue");
+    assert.equal(colorForChoiceKey(["blue", "green"], "End", "Numpad1"), "blue");
+    assert.equal(colorForChoiceKey(["blue", "green"], "ArrowDown", "Numpad2"), "green");
+    assert.equal(colorForChoiceKey(["red", "blue"], "r", "KeyR"), null);
+    assert.equal(colorForChoiceKey(["red", "blue"], "b", "KeyB"), null);
+    assert.equal(colorForChoiceKey(["red", "blue"], "g", "KeyG"), null);
+
+    for (let seed = 1; seed <= 40; seed += 1) {
+      const trials = buildStroopTrials(mulberry32(seed));
+      const leftColors = new Set<string>();
+      for (const trial of trials) {
+        assert.equal(colorForChoiceKey(trial.options, "1", "Digit1"), trial.options[0]);
+        assert.equal(colorForChoiceKey(trial.options, "2", "Numpad2"), trial.options[1]);
+        leftColors.add(trial.options[0]);
+      }
+      assert.ok(leftColors.size > 1);
+    }
   });
 });
 

@@ -44,6 +44,7 @@ import {
 import {
   STROOP_COUNT,
   buildStroopTrials,
+  colorForChoiceKey,
   randomForeperiodMs,
   reactionLatencyMs,
   scoreStroop,
@@ -159,7 +160,7 @@ const COPY = {
     stroopMobileHint: "三種顏色示範",
     stroopTwoChoice:
       "正式測試每題只會出現兩個選項，請選字體的顏色，不要選字的意思。",
-    stroopDesktopKeys: "電腦鍵與畫面上的選項相同：紅 [R]　藍 [B]　綠 [G]",
+    stroopDesktopKeys: "電腦操作：按 1 選左邊，按 2 選右邊；亦可直接點擊選項。",
     choice: { red: "紅", blue: "藍", green: "綠" } as Record<InkColor, string>,
     word: { red: "紅", blue: "藍", green: "綠" } as Record<InkColor, string>,
     again: "再測一次",
@@ -211,7 +212,8 @@ const COPY = {
     stroopMobileHint: "Color samples",
     stroopTwoChoice:
       "Each question in the test shows only two choices. Choose the color of the letters, not the meaning of the word.",
-    stroopDesktopKeys: "Desktop keys match the choices on screen: Red [R] · Blue [B] · Green [G]",
+    stroopDesktopKeys:
+      "Keyboard: press 1 for the left option or 2 for the right option. You can also click an option.",
     choice: { red: "Red", blue: "Blue", green: "Green" } as Record<InkColor, string>,
     word: { red: "RED", blue: "BLUE", green: "GREEN" } as Record<InkColor, string>,
     again: "Retry",
@@ -353,6 +355,7 @@ function Home() {
   const stroopResultsRef = useRef<StroopResult[]>([]);
   const stroopShownAtRef = useRef<number | null>(null);
   const stroopLockedRef = useRef(false);
+  const stroopAnswerRef = useRef<HTMLDivElement>(null);
   const sessionInterruptedRef = useRef(false);
 
   const startReactionTestRef = useRef<() => void>(() => {});
@@ -534,6 +537,9 @@ function Home() {
     stroopShownAtRef.current = performance.now();
     setStroopIndex(index);
     setStroopPhase("stimulus");
+    window.requestAnimationFrame(() => {
+      stroopAnswerRef.current?.focus({ preventScroll: true });
+    });
   }, []);
 
   const runCountdown = useCallback((onComplete: () => void) => {
@@ -837,24 +843,26 @@ function Home() {
       }
 
       if (stage !== "stroop") return;
-      if (stroopPhaseRef.current !== "stimulus") {
-        event.preventDefault();
-        return;
-      }
-      if (event.repeat) return;
-      const key = event.key.toLowerCase();
-      const ink =
-        key === "r" ? "red" : key === "b" ? "blue" : key === "g" ? "green" : null;
+      if (stroopPhaseRef.current !== "stimulus") return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      const trial = stroopTrialsRef.current[stroopIndexRef.current];
+      const ink = trial ? colorForChoiceKey(trial.options, event.key, event.code) : null;
       if (!ink) return;
       event.preventDefault();
+      if (event.repeat) return;
       handleStroopKeyRef.current(ink);
     };
 
-    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
     return () => {
-      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keydown", onKeyDown, true);
     };
   }, []);
+
+  useEffect(() => {
+    if (sessionStage !== "stroop" || stroopPhase !== "stimulus") return;
+    stroopAnswerRef.current?.focus({ preventScroll: true });
+  }, [sessionStage, stroopPhase, stroopIndex]);
 
   useEffect(() => {
     const onVisibility = () => {
@@ -1379,7 +1387,11 @@ function Home() {
               </p>
             </div>
           ) : sessionStage === "stroop" ? (
-            <div className="flex w-full max-w-md flex-col items-center justify-center">
+            <div
+              ref={stroopAnswerRef}
+              tabIndex={-1}
+              className="flex w-full max-w-md flex-col items-center justify-center outline-none"
+            >
               <p className="text-[11px] tracking-[0.35em] text-slate-400">{t.stroopTitle}</p>
               <div className="mt-10 flex min-h-28 w-full items-center justify-center px-2 sm:mt-12 sm:min-h-32">
                 {stroopPhase === "stimulus" && currentStroop ? (
@@ -1401,13 +1413,14 @@ function Home() {
                 {Math.min(stroopIndex + 1, STROOP_COUNT)} / {STROOP_COUNT}
               </p>
               <div className="mt-5 grid w-full grid-cols-2 gap-3">
-                {(currentStroop?.options ?? []).map((color) => {
+                {(currentStroop?.options ?? []).map((color, index) => {
                   const button = STROOP_BUTTONS.find((item) => item.color === color);
                   return (
                     <button
                       key={color}
                       type="button"
                       disabled={stroopPhase !== "stimulus"}
+                      onMouseDown={(event) => event.preventDefault()}
                       onClick={() => handleStroopKey(color)}
                       onTouchStart={(event) => {
                         if (stroopPhase !== "stimulus") return;
@@ -1416,7 +1429,10 @@ function Home() {
                       }}
                       className={`min-h-16 w-full rounded-xl py-5 text-xl font-bold text-white transition active:scale-95 disabled:pointer-events-none disabled:opacity-40 ${button?.liveClass ?? ""}`}
                     >
-                      {t.choice[color]}
+                      <span>{t.choice[color]}</span>
+                      <span className="ml-2 hidden text-xs font-semibold tracking-normal text-white/75 sm:inline">
+                        [{index + 1}]
+                      </span>
                     </button>
                   );
                 })}

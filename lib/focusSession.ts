@@ -177,6 +177,25 @@ export function buildStroopTrials(random: () => number = Math.random): StroopTri
   return FALLBACK_TRIALS;
 }
 
+/** Physical 1/2 keys. `event.key` is not reliable with an IME or a numpad. */
+export function choiceIndexFromKeyboard(input: { key: string; code?: string }): 0 | 1 | null {
+  const code = input.code ?? "";
+  if (code === "Digit1" || code === "Numpad1" || input.key === "1") return 0;
+  if (code === "Digit2" || code === "Numpad2" || input.key === "2") return 1;
+  return null;
+}
+
+/** Key 1 is the left button and key 2 is the right button for this trial only. */
+export function colorForChoiceKey(
+  options: readonly [InkColor, InkColor],
+  key: string,
+  code?: string,
+): InkColor | null {
+  const index = choiceIndexFromKeyboard({ key, code });
+  if (index === null) return null;
+  return options[index] ?? null;
+}
+
 export function randomForeperiodMs(random: () => number = Math.random) {
   const span = FOREPERIOD_MAX_MS - FOREPERIOD_MIN_MS + 1;
   return FOREPERIOD_MIN_MS + Math.floor(random() * span);
